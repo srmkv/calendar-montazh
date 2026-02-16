@@ -1,0 +1,54 @@
+[
+  {
+    "id": "u-1769095016605-7795",
+    "username": "admin",
+    "fullName": "Администратор",
+    "role": "admin",
+    "createdAt": "2026-01-22T15:16:56.605Z",
+    "updatedAt": "2026-01-22T15:16:56.605Z",
+    "passHash": {
+      "type": "scrypt",
+      "salt": "IUcYeppKsXsplZ1OpRgGFQ==",
+      "hash": "4Pmn5SMbTEb3as59mEQEJ1dkdyJ7FQMgh1FYkX956gUZjKbksLn+msabqJLnoVsh/YM5JMMOlAFNhAaU6SsJ+w=="
+    }
+  },
+  {
+    "id": "u-1769107164720-3795",
+    "username": "manager",
+    "fullName": "Менеджер",
+    "role": "viewer",
+    "passHash": {
+      "type": "scrypt",
+      "salt": "gt3PirFAeTYN1ofT+5eFEw==",
+      "hash": "prZz3/37xX9GxWrxl14JPJzITz4ccwMiFtWX3sADHLgnDnYc30wKP+V9JN3U1Af0CX5oI6Nv8O1qreGpXpKosA=="
+    },
+    "createdAt": "2026-01-22T18:39:24.772Z",
+    "updatedAt": "2026-02-14T09:26:16.208Z"
+  },
+  {
+    "id": "u-1769420611864-7685",
+    "username": "m.vilannen",
+    "fullName": "Виланнен Маргарита",
+    "role": "operator",
+    "passHash": {
+      "type": "scrypt",
+      "salt": "kZ0hNZfZIcOldoXl5uv4Ew==",
+      "hash": "fZhWGrI7I9JpIGMXuTdWIZDtLLeB3BGhdXPDLL48O0RYeku/110nkaCTxlebThOVIvFj43h/2IyzlO12XYupDA=="
+    },
+    "createdAt": "2026-01-26T09:43:31.916Z",
+    "updatedAt": "2026-02-14T09:23:12.176Z"
+  },
+  {
+    "id": "u-1771061159284-673",
+    "username": "montazh",
+    "fullName": "Монтажник",
+    "role": "viewer",
+    "passHash": {
+      "type": "scrypt",
+      "salt": "CoLzdT2xgMHUsZ2X1KQK/g==",
+      "hash": "wU/OesHJqU8u9ncU1nppsAIKtLbgkttBkB+iVjpV48E7VCf5UBEWSIaroVFz0+4TbXnXi4I5uoauXmfRVZzJPw=="
+    },
+    "createdAt": "2026-02-14T09:25:59.326Z",
+    "updatedAt": "2026-02-14T09:25:59.326Z"
+  }
+]

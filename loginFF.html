@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Вход — Календарь</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e5e7eb;
+      --accent:#fbbf24;
+      --danger:#dc2626;
+    }
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:radial-gradient(1000px 700px at 30% 20%, #1b2a55 0%, var(--bg) 55%, #070b14 100%);color:var(--text);}
+    .wrap{height:100%;display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;}
+    .card{
+      width:min(440px, 96vw);
+      background:var(--card);
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:18px;
+      box-shadow:0 18px 50px rgba(0,0,0,0.45);
+      overflow:hidden;
+    }
+    .head{
+      padding:16px 16px 12px 16px;
+      border-bottom:1px solid var(--border);
+      background:linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
+    }
+    .title{margin:0;font-size:16px;font-weight:900;letter-spacing:0.2px;}
+    .sub{margin:6px 0 0 0;font-size:12px;font-weight:600;color:var(--muted);}
+    .body{padding:14px 16px 16px 16px;display:flex;flex-direction:column;gap:10px;}
+    .field{display:flex;flex-direction:column;gap:6px;}
+    label{font-size:12px;font-weight:800;color:#334155;}
+    input{
+      width:100%;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px 12px;
+      font-size:13px;
+      outline:none;
+      background:#fff;
+      box-sizing:border-box;
+      font-weight:600;
+    }
+    input:focus{border-color:rgba(251,191,36,0.9);box-shadow:0 0 0 4px rgba(251,191,36,0.22);}
+    .btn{
+      appearance:none;
+      border:1px solid rgba(15,23,42,0.15);
+      background:#0f172a;
+      color:#fff;
+      font-weight:900;
+      font-size:13px;
+      padding:10px 14px;
+      border-radius:12px;
+      cursor:pointer;
+      width:100%;
+    }
+    .btn:disabled{opacity:0.65;cursor:not-allowed;}
+    .hint{font-size:12px;color:var(--muted);font-weight:700;}
+    .err{
+      display:none;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid rgba(220,38,38,0.25);
+      background:rgba(220,38,38,0.08);
+      color:#7f1d1d;
+      font-weight:800;
+      font-size:12px;
+    }
+    .err.open{display:block;}
+    .foot{
+      padding:12px 16px 14px 16px;
+      border-top:1px solid var(--border);
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+      background:#fff;
+    }
+    .small{font-size:11px;font-weight:700;color:var(--muted);line-height:1.2;}
+    .badge{font-size:11px;font-weight:900;color:#111827;background:rgba(251,191,36,0.25);border:1px solid rgba(251,191,36,0.45);padding:4px 10px;border-radius:999px;white-space:nowrap;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="head">
+        <h1 class="title">Авторизация в календаре</h1>
+      
+      </div>
+
+      <div class="body">
+        <div class="err" id="err"></div>
+
+        <div class="field">
+          <label for="u">Логин</label>
+          <input id="u" autocomplete="username" placeholder="Введите логин" />
+        </div>
+
+        <div class="field">
+          <label for="p">Пароль</label>
+          <input id="p" type="password" autocomplete="current-password" placeholder="Введите пароль" />
+        </div>
+
+        <button class="btn" id="btn">Войти</button>
+       
+      </div>
+
+      
+    </div>
+  </div>
+
+<script>
+  const elU = document.getElementById('u');
+  const elP = document.getElementById('p');
+  const elBtn = document.getElementById('btn');
+  const elErr = document.getElementById('err');
+
+  function showErr(msg){
+    elErr.textContent = msg || 'Ошибка входа';
+    elErr.classList.add('open');
+  }
+  function clearErr(){
+    elErr.textContent = '';
+    elErr.classList.remove('open');
+  }
+
+  async function doLogin(){
+    clearErr();
+    const username = (elU.value || '').trim();
+    const password = (elP.value || '');
+    if (!username || !password) {
+      showErr('Введите логин и пароль.');
+      return;
+    }
+
+    elBtn.disabled = true;
+    elBtn.textContent = 'Проверяю...';
+
+    try{
+      const r = await fetch('/api/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','Accept':'application/json'},
+        body: JSON.stringify({ username, password })
+      });
+
+      if (!r.ok) {
+        showErr('Неверный логин или пароль.');
+        return;
+      }
+
+      window.location.href = '/';
+    } catch(e){
+      showErr('Ошибка сети: ' + (e?.message || e));
+    } finally {
+      elBtn.disabled = false;
+      elBtn.textContent = 'Войти';
+    }
+  }
+
+  elBtn.addEventListener('click', doLogin);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+  setTimeout(() => { try { elU.focus(); } catch {} }, 0);
+</script>
+</body>
+</html>

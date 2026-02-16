@@ -1,0 +1,1403 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Календарь (mobile)</title>
+
+  <!-- Leaflet (можно заменить на локальные /static/...) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root{
+      --bg: #f3f4f6;
+      --panel: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --muted2:#475569;
+      --border:#e5e7eb;
+      --select: #fbbf24;
+      --danger:#dc2626;
+      --ok:#16a34a;
+
+      --shadow: 0 8px 20px rgba(15,23,42,0.06);
+      --shadow2: 0 -18px 40px rgba(15,23,42,0.22);
+
+      --radius: 16px;
+
+      /* базовая "комфортная" высота дня; теперь это MIN-height, дни скроллятся */
+      --dayRowH: 112px;
+
+      /* iOS safe areas */
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      overflow:hidden;
+    }
+
+    /* ===== APP LAYOUT ===== */
+    .app{
+      height: 100dvh;
+      height: calc(var(--vh, 1vh) * 100);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+
+    .topbar{
+      background: var(--panel);
+      border-bottom:1px solid var(--border);
+      padding: calc(10px + var(--sat)) 12px 8px 12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      z-index: 10;
+    }
+    .title{
+      font-size:14px;
+      font-weight:900;
+      line-height:1.1;
+      letter-spacing:0.1px;
+    }
+    .user{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      min-width:0;
+    }
+    .pill{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#fff;
+      color:var(--muted2);
+      font-weight:800;
+      max-width: 56vw;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .btn{
+      appearance:none;
+      border:1px solid var(--border);
+      background:#fff;
+      color:var(--text);
+      font-weight:900;
+      font-size:12px;
+      padding:8px 10px;
+      border-radius:999px;
+      cursor:pointer;
+      white-space:nowrap;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn.danger{
+      border-color: rgba(220,38,38,0.35);
+      color:#991b1b;
+      background:#fff;
+    }
+    .btn.primary{
+      border-color: rgba(251,191,36,0.70);
+      box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.15);
+    }
+
+    .tabs{
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 10px;
+      display:flex;
+      gap:8px;
+      z-index: 10;
+    }
+    .tab{
+      flex:1 1 0;
+      border:1px solid var(--border);
+      background:#fff;
+      border-radius: 14px;
+      padding: 10px 10px;
+      font-weight:1000;
+      font-size:12px;
+      cursor:pointer;
+    }
+    .tab.active{
+      outline: 2px solid rgba(251,191,36,0.70);
+      box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.20);
+    }
+
+    .searchrow{
+      background: var(--panel);
+      border-bottom:1px solid var(--border);
+      padding: 8px 10px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      z-index: 10;
+    }
+    .searchrow input{
+      flex:1 1 auto;
+      border:1px solid var(--border);
+      border-radius: 999px;
+      padding: 10px 12px;
+      font-size: 12px;
+      outline:none;
+      background:#fff;
+      color:var(--text);
+      font-weight:700;
+      min-width:0;
+    }
+    .searchcount{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#fff;
+      color:var(--muted2);
+      font-weight:900;
+      white-space:nowrap;
+    }
+
+    /* ===== VIEWS ===== */
+    .views{
+      flex: 1 1 auto;
+      min-height:0;
+      position:relative;
+      z-index: 1;
+    }
+    .view{
+      position:absolute;
+      inset:0;
+      padding: 10px;
+      box-sizing:border-box;
+      display:none;
+      min-height:0;
+    }
+    .view.active{ display:flex; }
+
+    /* ===== CALENDAR VIEW (custom week list) ===== */
+    #viewCal{
+      flex-direction:column;
+      gap:10px;
+    }
+    .calCard{
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+    .calHead{
+      padding: 10px 10px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      flex: 0 0 auto;
+    }
+    .calHead .range{
+      font-size:12px;
+      font-weight:1000;
+      color:var(--text);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      min-width:0;
+    }
+    .calHead .nav{
+      display:flex;
+      gap:8px;
+      flex: 0 0 auto;
+    }
+    .iconbtn{
+      width:36px;
+      height:36px;
+      border-radius: 14px;
+      border:1px solid var(--border);
+      background:#fff;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:1000;
+      cursor:pointer;
+    }
+    .iconbtn:active{ transform: translateY(1px); }
+
+    /* ДНИ НЕДЕЛИ ТЕПЕРЬ СКРОЛЛЯТСЯ ПО ВЕРТИКАЛИ */
+    .weekList{
+      flex: 1 1 auto;
+      min-height:0;
+      overflow:auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 8px;
+      background: #fff;
+    }
+
+    .dayRow{
+      /* ВАЖНО: больше нет фиксированной высоты */
+      min-height: var(--dayRowH);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #f8fafc;
+      display:flex;
+      gap: 8px;
+      padding: 8px;
+      box-sizing:border-box;
+      margin-bottom: 8px;
+      overflow: visible; /* чтобы карточки не обрезались */
+      align-items: stretch;
+    }
+    .dayRow:last-child{ margin-bottom: 0; }
+
+    .dayLabel{
+      width: 66px;
+      flex: 0 0 auto;
+      border: 1px solid var(--border);
+      background:#fff;
+      border-radius: 12px;
+      padding: 8px 6px;
+      display:flex;
+      flex-direction:column;
+      justify-content:flex-start;  /* чтобы в высоком дне не "плавало" */
+      align-items:center;
+      gap:4px;
+      box-sizing:border-box;
+    }
+    .dow{
+      font-size: 11px;
+      font-weight: 1000;
+      color: var(--muted2);
+      line-height:1;
+      margin-top: 2px;
+    }
+    .dnum{
+      font-size: 13px;
+      font-weight: 1000;
+      color: var(--text);
+      line-height:1;
+    }
+    .dmon{
+      font-size: 10px;
+      font-weight: 900;
+      color: var(--muted);
+      line-height:1;
+    }
+
+    .cards{
+      flex: 1 1 auto;
+      min-width:0;
+      display:flex;
+      gap: 8px;
+      overflow-x:auto;
+      overflow-y:visible; /* пусть карточки растут по высоте */
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 4px;
+      scroll-snap-type: x proximity;
+      align-items: stretch;
+    }
+    .cards::-webkit-scrollbar{ height: 6px; }
+    .cards::-webkit-scrollbar-thumb{ background: rgba(15,23,42,0.12); border-radius:999px; }
+
+    .evCard{
+      scroll-snap-align: start;
+      flex: 0 0 auto;
+      width: min(250px, 78vw);
+
+      /* больше НЕТ фиксированной высоты — карточка растёт, чтобы всё влезло */
+      height: auto;
+      min-height: calc(var(--dayRowH) - 16px);
+
+      border: 1px solid var(--border);
+      background:#fff;
+      border-radius: 14px;
+      box-shadow: 0 6px 16px rgba(15,23,42,0.05);
+      padding: 10px 10px 10px 12px;
+      box-sizing:border-box;
+      position:relative;
+      overflow:hidden;
+      cursor:pointer;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:8px;
+    }
+    .evCard:active{ transform: translateY(1px); }
+    .evCard.selected{
+      outline: 2px solid rgba(251,191,36,0.85);
+      box-shadow: 0 0 0 4px rgba(251,191,36,0.22);
+    }
+    .evStripe{
+      position:absolute;
+      left:0;
+      top:0;
+      bottom:0;
+      width: 6px;
+      background: #3b82f6;
+    }
+
+    .evTop{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-height:0;
+      padding-right: 6px;
+    }
+
+    /* Показываем больше текста, но без раздувания на 20 строк */
+    .evLine1, .evLine2, .evLine3{
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      overflow:hidden;
+      white-space: normal;
+      word-break: break-word;
+    }
+    .evLine1{
+      font-size: 12px;
+      font-weight: 1000;
+      line-height: 1.2;
+      -webkit-line-clamp: 2;
+    }
+    .evLine2{
+      font-size: 11px;
+      font-weight: 850;
+      color: var(--muted2);
+      line-height: 1.2;
+      -webkit-line-clamp: 2;
+    }
+    .evLine3{
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--muted);
+      line-height: 1.2;
+      -webkit-line-clamp: 3;
+    }
+
+    .evBadges{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      align-items:center;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border:1px solid rgba(15,23,42,0.16);
+      background: rgba(255,255,255,0.9);
+      font-size: 10px;
+      font-weight: 1000;
+      color: var(--text);
+      white-space:nowrap;
+    }
+    .badge.done{
+      border-color: rgba(22,163,74,0.35);
+      color: #166534;
+      background: rgba(22,163,74,0.08);
+    }
+    .badge.recl{
+      border-color: rgba(220,38,38,0.35);
+      color: #7f1d1d;
+      background: rgba(220,38,38,0.08);
+    }
+
+    .emptyHint{
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--muted2);
+      padding: 10px;
+      white-space:nowrap;
+    }
+
+    /* ===== MAP VIEW ===== */
+    #viewMap{
+      flex-direction:column;
+      gap:10px;
+    }
+    .mapWrap{
+      flex: 1 1 auto;
+      min-height:0;
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      overflow:hidden;
+      box-shadow: var(--shadow);
+      background:#fff;
+    }
+    #map{
+      width:100%;
+      height:100%;
+    }
+
+    /* ===== TOAST ===== */
+    .toast{
+      position: fixed;
+      left: 50%;
+      bottom: calc(18px + var(--sab));
+      transform: translateX(-50%);
+      background: rgba(15,23,42,0.92);
+      color:#fff;
+      border:1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      padding: 10px 12px;
+      font-size:12px;
+      font-weight:1000;
+      display:none;
+      z-index: 50000;
+      max-width: 92vw;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .toast.show{ display:block; }
+
+    /* ===== LOADER ===== */
+    .loading-backdrop{
+      position: fixed;
+      inset: 0;
+      z-index: 20000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(15, 23, 42, 0.35);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+    .loading-backdrop.open{ display:flex; }
+    .loading-card{
+      width: min(520px, 92vw);
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(15,23,42,0.25);
+      padding: 14px 16px;
+      display:flex;
+      align-items:center;
+      gap: 12px;
+    }
+    .loading-spinner{
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 3px solid var(--border);
+      border-top-color: var(--text);
+      animation: spin 0.9s linear infinite;
+      flex: 0 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title{ font-size: 13px; font-weight: 1000; }
+    .loading-sub{ font-size: 12px; font-weight: 850; color: var(--muted2); }
+
+    /* ===== BOTTOM SHEET ===== */
+    .sheet-backdrop{
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.40);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+      z-index: 12000;
+    }
+    .sheet-backdrop.open{
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .sheet{
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: min(70dvh, 620px);
+      height: min(calc(var(--vh, 1vh) * 70), 620px);
+      max-height: calc(82dvh);
+      max-height: calc(var(--vh, 1vh) * 82);
+      background: var(--panel);
+      border-top-left-radius: 18px;
+      border-top-right-radius: 18px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow2);
+      transform: translateY(105%);
+      transition: transform 220ms cubic-bezier(.2,.9,.2,1);
+      z-index: 12010;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      padding-bottom: var(--sab);
+    }
+    .sheet.open{ transform: translateY(0); }
+
+    .sheet-handle{
+      width: 42px;
+      height: 5px;
+      border-radius: 999px;
+      background: #d1d5db;
+      margin: 10px auto 6px auto;
+      flex: 0 0 auto;
+    }
+    .sheet-header{
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex: 0 0 auto;
+    }
+    .sheet-titleblock{
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .sheet-title{
+      font-size:13px;
+      font-weight:1000;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .sheet-sub{
+      font-size:11px;
+      font-weight:850;
+      color:var(--muted);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .sheet-actions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex: 0 0 auto;
+    }
+
+    .sheet-body{
+      padding: 10px 12px 16px 12px;
+      overflow:auto;
+      -webkit-overflow-scrolling: touch;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    /* ===== CARD CONTENT (inside sheet) ===== */
+    .box{
+      border:1px solid var(--border);
+      background:#f8fafc;
+      border-radius: 14px;
+      padding: 10px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 104px 1fr;
+      gap: 6px 10px;
+      align-items:start;
+      font-size:12px;
+      line-height:1.35;
+    }
+    .k{
+      color:var(--muted);
+      font-weight:900;
+      padding-top:2px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .v{
+      color:var(--text);
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 10px;
+      min-width:0;
+      font-weight:700;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .v.multiline{
+      white-space:pre-wrap;
+      overflow:visible;
+      text-overflow:clip;
+    }
+
+    .links{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top: 6px;
+    }
+    .a{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      border:1px solid var(--border);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size:12px;
+      font-weight:1000;
+      color:var(--text);
+      background:#fff;
+      text-decoration:none;
+    }
+    .a:active{ transform: translateY(1px); }
+    .a.disabled{
+      opacity:0.55;
+      pointer-events:none;
+    }
+
+    .divider{
+      height:1px;
+      background: var(--border);
+      margin: 2px 0;
+    }
+
+    .mono{ font-variant-numeric: tabular-nums; }
+
+    /* marker class (leaflet divIcon) */
+    .pin-marker{ background:transparent; border:none; }
+    .pin-marker svg{ display:block; filter: drop-shadow(0 2px 4px rgba(15,23,42,0.25)); }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="title">Календарь (mobile)</div>
+      <div class="user">
+        <div class="pill" id="userPill">…</div>
+        <button class="btn danger" id="btnLogout">Выйти</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tabCal" data-view="cal">Календарь</button>
+      <button class="tab" id="tabMap" data-view="map">Карта</button>
+    </div>
+
+    <div class="searchrow">
+      <input id="q" type="text" placeholder="Поиск по заказу/клиенту/адресу…" />
+      <div class="searchcount" id="cnt">0</div>
+    </div>
+
+    <div class="views">
+      <!-- CAL -->
+      <div class="view active" id="viewCal">
+        <div class="calCard">
+          <div class="calHead">
+            <div class="range" id="rangeText">…</div>
+            <div class="nav">
+              <button class="iconbtn" id="prevWeek" title="Предыдущая неделя">‹</button>
+              <button class="iconbtn" id="today" title="Текущая неделя">●</button>
+              <button class="iconbtn" id="nextWeek" title="Следующая неделя">›</button>
+            </div>
+          </div>
+          <div class="weekList" id="weekList">
+            <div class="emptyHint">Загрузка…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAP -->
+      <div class="view" id="viewMap">
+        <div class="mapWrap">
+          <div id="map"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- loader -->
+  <div class="loading-backdrop" id="loader">
+    <div class="loading-card">
+      <div class="loading-spinner"></div>
+      <div>
+        <div class="loading-title" id="loaderTitle">Загрузка…</div>
+        <div class="loading-sub" id="loaderSub">Подождите</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- toast -->
+  <div class="toast" id="toast">…</div>
+
+  <!-- bottom sheet -->
+  <div class="sheet-backdrop" id="sheetBackdrop"></div>
+  <div class="sheet" id="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-titleblock">
+        <div class="sheet-title" id="sheetTitle">…</div>
+        <div class="sheet-sub" id="sheetSub">…</div>
+      </div>
+      <div class="sheet-actions">
+        <button class="btn" id="btnToMap">К карте</button>
+        <button class="btn danger" id="btnClose">Закрыть</button>
+      </div>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+
+  <script>
+    // ===== viewport height fix (iOS address bar) =====
+    function updateVH(){
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', vh + 'px');
+    }
+    window.addEventListener('resize', updateVH, { passive:true });
+    updateVH();
+
+    // ===== helpers =====
+    const $ = (s) => document.querySelector(s);
+    const toastEl = $('#toast');
+    let toastT = null;
+    function toast(msg){
+      clearTimeout(toastT);
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      toastT = setTimeout(()=>toastEl.classList.remove('show'), 1800);
+    }
+
+    const loader = $('#loader');
+    function showLoader(title, sub){
+      $('#loaderTitle').textContent = title || 'Загрузка…';
+      $('#loaderSub').textContent = sub || '';
+      loader.classList.add('open');
+    }
+    function hideLoader(){ loader.classList.remove('open'); }
+
+    function pad2(n){ return String(n).padStart(2,'0'); }
+    function isDateOnlyString(v){ return typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(v.trim()); }
+
+    function toDateObj(isoOrDate){
+      if (!isoOrDate) return null;
+      const s = String(isoOrDate).trim();
+      if (!s) return null;
+      if (isDateOnlyString(s)) {
+        const [y,m,d] = s.split('-').map(Number);
+        return new Date(y, m-1, d, 0, 0, 0, 0);
+      }
+      const dt = new Date(s);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+
+    function ymd(dateObj){
+      const y = dateObj.getFullYear();
+      const m = pad2(dateObj.getMonth()+1);
+      const d = pad2(dateObj.getDate());
+      return `${y}-${m}-${d}`;
+    }
+
+    function startOfWeekMonday(d){
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const day = (x.getDay() + 6) % 7; // Mon=0 ... Sun=6
+      x.setDate(x.getDate() - day);
+      x.setHours(0,0,0,0);
+      return x;
+    }
+
+    function addDays(d, n){
+      const x = new Date(d.getTime());
+      x.setDate(x.getDate() + n);
+      return x;
+    }
+
+    function fmtRange(d0, d6){
+      const a = `${pad2(d0.getDate())}.${pad2(d0.getMonth()+1)}`;
+      const b = `${pad2(d6.getDate())}.${pad2(d6.getMonth()+1)}.${String(d6.getFullYear()).slice(-2)}`;
+      return `${a} — ${b}`;
+    }
+
+    function normPhone(p){
+      const s = String(p||'').trim();
+      if (!s) return '';
+      return s.replace(/[^\\d+]/g,'');
+    }
+
+    function safeText(v){
+      if (v === null || v === undefined) return '';
+      return String(v);
+    }
+
+    function buildCopyText(ev){
+      const p = ev.extendedProps || {};
+      const lines = [];
+      const order = p.orderNumber ? `Заказ: ${p.orderNumber}` : `ID: ${ev.id}`;
+      lines.push(order);
+      if (p.customerName) lines.push(`Клиент: ${p.customerName}`);
+      if (p.phone) lines.push(`Тел: ${p.phone}`);
+      if (p.address) lines.push(`Адрес: ${p.address}`);
+      if (p.stoneText) lines.push(`Камень: ${p.stoneText}`);
+      const when = safeText(ev.start);
+      if (when) lines.push(`Дата: ${when}`);
+      if (p.installersNames && p.installersNames.length) lines.push(`Монтажники: ${p.installersNames.join(', ')}`);
+      if (p.managerName) lines.push(`Менеджер: ${p.managerName}`);
+      const c = p.freeComment ? String(p.freeComment).trim() : '';
+      if (c) lines.push(`Комментарий: ${c}`);
+      return lines.join('\\n');
+    }
+
+    async function copyToClipboard(text){
+      try{
+        await navigator.clipboard.writeText(text);
+        toast('Скопировано');
+        return true;
+      }catch(e){
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try{
+          document.execCommand('copy');
+          toast('Скопировано');
+          return true;
+        }catch(e2){
+          toast('Не удалось скопировать');
+          return false;
+        }finally{
+          document.body.removeChild(ta);
+        }
+      }
+    }
+
+    function yandexRouteLinks(lat, lng){
+      const la = String(lat);
+      const lo = String(lng);
+      const scheme = `yandexnavi://build_route_on_map?lat_to=${encodeURIComponent(la)}&lon_to=${encodeURIComponent(lo)}`;
+      const web = `https://yandex.ru/maps/?rtext=~${encodeURIComponent(la)},${encodeURIComponent(lo)}&rtt=auto`;
+      return { scheme, web };
+    }
+
+    // ===== auth/user =====
+    async function apiFetch(url, opts){
+      const o = Object.assign({
+        credentials:'include',
+        cache:'no-store',
+        headers: { 'Content-Type':'application/json' }
+      }, opts || {});
+      return fetch(url, o);
+    }
+
+    async function loadMe(){
+      try{
+        const r = await apiFetch('/api/me');
+        if (!r.ok) return;
+        const j = await r.json();
+        const u = j && j.user ? j.user : null;
+        if (u){
+          $('#userPill').textContent = `${u.fullName || u.username || 'user'} • ${u.role || ''}`.trim();
+        }
+      }catch{}
+    }
+
+    $('#btnLogout').addEventListener('click', async ()=>{
+      try{
+        await apiFetch('/api/logout', { method:'POST', body: '{}' });
+      }catch{}
+      location.href = '/login';
+    });
+
+    // ===== data state =====
+    let allEvents = [];
+    let filteredEvents = [];
+    let weekStart = startOfWeekMonday(new Date());
+    let selectedId = null;
+
+    // ===== map state =====
+    let map = null;
+    let markers = new Map(); // id -> L.Marker
+
+    // ===== bottom sheet =====
+    const sheet = $('#sheet');
+    const sheetBackdrop = $('#sheetBackdrop');
+    const sheetBody = $('#sheetBody');
+    const btnClose = $('#btnClose');
+    const btnToMap = $('#btnToMap');
+
+    function openSheet(){
+      sheet.classList.add('open');
+      sheetBackdrop.classList.add('open');
+    }
+    function closeSheet(){
+      sheet.classList.remove('open');
+      sheetBackdrop.classList.remove('open');
+    }
+    //sheetBackdrop.addEventListener('click', closeSheet);
+    sheetBackdrop.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); });
+
+    btnClose.addEventListener('click', closeSheet);
+
+    // ===== tabs =====
+    function setTab(name){
+      const isCal = (name === 'cal');
+      $('#tabCal').classList.toggle('active', isCal);
+      $('#tabMap').classList.toggle('active', !isCal);
+
+      $('#viewCal').classList.toggle('active', isCal);
+      $('#viewMap').classList.toggle('active', !isCal);
+
+      if (!isCal){
+        ensureMap();
+        setTimeout(()=>{ try{ map.invalidateSize(); }catch{} }, 180);
+        if (selectedId) focusOnMap(selectedId, true);
+      }
+    }
+    $('#tabCal').addEventListener('click', ()=> setTab('cal'));
+    $('#tabMap').addEventListener('click', ()=> setTab('map'));
+
+    // ===== build week view =====
+    function inWeek(ev, ws){
+      const d = toDateObj(ev.start);
+      if (!d) return false;
+      const k = ymd(d);
+      const w0 = ymd(ws);
+      const w6 = ymd(addDays(ws, 6));
+      return k >= w0 && k <= w6;
+    }
+
+    function groupEventsByDay(evs){
+      const map = new Map(); // ymd -> [ev]
+      for (const ev of evs){
+        const d = toDateObj(ev.start);
+        if (!d) continue;
+        const k = ymd(d);
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(ev);
+      }
+      for (const [k, arr] of map.entries()){
+        arr.sort((a,b)=>{
+          const sa = (a.extendedProps && typeof a.extendedProps.sortKey === 'number') ? a.extendedProps.sortKey : 9;
+          const sb = (b.extendedProps && typeof b.extendedProps.sortKey === 'number') ? b.extendedProps.sortKey : 9;
+          if (sa !== sb) return sa - sb;
+          return String(a.title||'').localeCompare(String(b.title||''));
+        });
+      }
+      return map;
+    }
+
+    function dowRu(i){ return ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i] || ''; }
+    function monRu(m){ return ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'][m] || ''; }
+
+    function renderWeek(){
+      const w0 = weekStart;
+      const w6 = addDays(w0, 6);
+      $('#rangeText').textContent = fmtRange(w0, w6);
+
+      const wkEvents = filteredEvents.filter(ev => inWeek(ev, w0));
+      $('#cnt').textContent = String(filteredEvents.length);
+
+      const grouped = groupEventsByDay(wkEvents);
+      const list = $('#weekList');
+      list.innerHTML = '';
+
+      for (let i=0;i<7;i++){
+        const d = addDays(w0, i);
+        const k = ymd(d);
+        const arr = grouped.get(k) || [];
+
+        const row = document.createElement('div');
+        row.className = 'dayRow';
+        row.dataset.date = k;
+
+        const label = document.createElement('div');
+        label.className = 'dayLabel';
+        label.innerHTML = `
+          <div class="dow">${dowRu(i)}</div>
+          <div class="dnum mono">${pad2(d.getDate())}</div>
+          <div class="dmon">${monRu(d.getMonth())}</div>
+        `;
+        row.appendChild(label);
+
+        const cards = document.createElement('div');
+        cards.className = 'cards';
+
+        if (!arr.length){
+          const hint = document.createElement('div');
+          hint.className = 'emptyHint';
+          hint.textContent = 'Нет карточек';
+          cards.appendChild(hint);
+        } else {
+          for (const ev of arr){
+            const p = ev.extendedProps || {};
+            const card = document.createElement('div');
+            card.className = 'evCard';
+            card.dataset.id = ev.id;
+
+            const color = ev.backgroundColor || p.color || '#3b82f6';
+            const order = (p.orderNumber ? String(p.orderNumber) : '') || '';
+            const stone = (p.stoneText ? String(p.stoneText) : '') || '';
+            const customer = (p.customerName ? String(p.customerName) : '') || '';
+            const addr = (p.address ? String(p.address) : '') || '';
+            const done = !!p.done;
+            const recl = (String(p.stageId||'').includes('UC_') && (String(p.color||'') === '#ef4444')) || (String(color).toLowerCase() === '#ef4444');
+
+            const l1 = (order ? order : String(ev.title||ev.id));
+            const l2 = (stone ? stone : (customer ? customer : ''));
+            const l3 = (addr ? addr : (customer && stone ? customer : ''));
+
+            const badges = [];
+            if (done) badges.push(`<span class="badge done">готово</span>`);
+            if (recl) badges.push(`<span class="badge recl">рекламация</span>`);
+            if (!done && !recl && p.otkDate) badges.push(`<span class="badge">ОТК</span>`);
+            if (p.managerName) badges.push(`<span class="badge">мен: ${escapeHtml(p.managerName)}</span>`);
+
+            card.innerHTML = `
+              <div class="evStripe" style="background:${escapeAttr(color)}"></div>
+              <div class="evTop">
+                <div class="evLine1">${escapeHtml(l1)}</div>
+                <div class="evLine2">${escapeHtml(l2)}</div>
+                <div class="evLine3">${escapeHtml(l3)}</div>
+              </div>
+              <div class="evBadges">${badges.join('')}</div>
+            `;
+
+            if (selectedId && String(selectedId) === String(ev.id)) card.classList.add('selected');
+
+            card.addEventListener('click', ()=> selectEvent(ev.id, true));
+            cards.appendChild(card);
+          }
+        }
+
+        row.appendChild(cards);
+        list.appendChild(row);
+      }
+
+      syncMapMarkers();
+    }
+
+    // ===== HTML escape =====
+    function escapeHtml(s){
+      return String(s ?? '')
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#039;');
+    }
+    function escapeAttr(s){ return escapeHtml(s).replace(/`/g,''); }
+
+    // ===== search filter =====
+    function applyFilter(){
+      const q = String($('#q').value || '').trim().toLowerCase();
+      if (!q){
+        filteredEvents = allEvents.slice();
+      } else {
+        filteredEvents = allEvents.filter(ev=>{
+          const p = ev.extendedProps || {};
+          const blob = [
+            ev.id, ev.title, ev.start,
+            p.orderNumber, p.customerName, p.phone,
+            p.address, p.stoneText, p.materialCode,
+            p.managerName, (p.installersNames||[]).join(' '),
+            p.installComment, p.extraComment, p.freeComment
+          ].filter(Boolean).join(' ').toLowerCase();
+          return blob.includes(q);
+        });
+      }
+      renderWeek();
+    }
+    $('#q').addEventListener('input', applyFilter);
+
+    // ===== selection + sheet =====
+    function getEventById(id){
+      const s = String(id);
+      return allEvents.find(e => String(e.id) === s) || null;
+    }
+
+    function selectEvent(id, open){
+      selectedId = String(id);
+      document.querySelectorAll('.evCard').forEach(el=>{
+        el.classList.toggle('selected', String(el.dataset.id) === String(selectedId));
+      });
+
+      const ev = getEventById(selectedId);
+      if (!ev) return;
+
+      fillSheet(ev);
+      if (open) openSheet();
+
+      focusOnMap(selectedId, false);
+    }
+
+    function fillSheet(ev){
+      const p = ev.extendedProps || {};
+      const title = p.orderNumber ? String(p.orderNumber) : (String(ev.title||ev.id));
+      const sub = [
+        p.customerName ? String(p.customerName) : '',
+        p.stoneText ? String(p.stoneText) : ''
+      ].filter(Boolean).join(' • ') || (p.address ? String(p.address) : '');
+
+      $('#sheetTitle').textContent = title;
+      $('#sheetSub').textContent = sub || '';
+
+      const phone = safeText(p.phone || '').trim();
+      const phoneNorm = normPhone(phone);
+      const phoneHref = phoneNorm ? `tel:${phoneNorm}` : '';
+
+      const addr = safeText(p.address || '').trim();
+      const lat = (p.lat !== null && p.lat !== undefined) ? p.lat : null;
+      const lng = (p.lng !== null && p.lng !== undefined) ? p.lng : null;
+
+      const hasCoords = (lat !== null && lng !== null && String(lat) !== '' && String(lng) !== '');
+      btnToMap.classList.toggle('primary', hasCoords);
+      btnToMap.disabled = !hasCoords;
+
+      const when = safeText(ev.start || '').trim();
+      const manager = safeText(p.managerName || '').trim();
+      const installers = (p.installersNames && p.installersNames.length) ? p.installersNames.join(', ') : '';
+      const comment = safeText(p.freeComment || '').trim();
+
+      const links = [];
+      if (phoneHref) links.push(`<a class="a" href="${escapeAttr(phoneHref)}">📞 Позвонить</a>`);
+      else links.push(`<span class="a disabled">📞 Телефона нет</span>`);
+
+      if (hasCoords){
+        const { scheme, web } = yandexRouteLinks(lat, lng);
+        links.push(`<a class="a" href="${escapeAttr(scheme)}">🧭 Навигатор</a>`);
+        links.push(`<a class="a" href="${escapeAttr(web)}" target="_blank" rel="noopener">🗺️ Карта</a>`);
+      } else {
+        links.push(`<span class="a disabled">🧭 Нет координат</span>`);
+      }
+
+      const copyText = buildCopyText(ev);
+
+      sheetBody.innerHTML = `
+        <div class="box">
+          <div class="grid">
+            <div class="k">Дата</div>
+            <div class="v mono">${escapeHtml(when || '—')}</div>
+
+            <div class="k">Клиент</div>
+            <div class="v">${escapeHtml(p.customerName || '—')}</div>
+
+            <div class="k">Телефон</div>
+            <div class="v mono">${escapeHtml(phone || '—')}</div>
+
+            <div class="k">Адрес</div>
+            <div class="v multiline">${escapeHtml(addr || '—')}</div>
+
+            <div class="k">Камень</div>
+            <div class="v">${escapeHtml(p.stoneText || '—')}</div>
+
+            <div class="k">ОТК</div>
+            <div class="v mono">${escapeHtml(p.otkDate || '—')}</div>
+
+            <div class="k">Менеджер</div>
+            <div class="v">${escapeHtml(manager || '—')}</div>
+
+            <div class="k">Монтаж</div>
+            <div class="v">${escapeHtml(installers || '—')}</div>
+
+            <div class="k">Коорд.</div>
+            <div class="v mono">${hasCoords ? escapeHtml(`${lat}, ${lng}`) : '—'}</div>
+          </div>
+
+          <div class="links">
+            ${links.join('')}
+            <button class="a" id="btnCopy">📋 Копировать</button>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="k" style="margin-bottom:6px;">Комментарий</div>
+          <div class="v multiline">${escapeHtml(comment || '—')}</div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="box">
+          <div class="k" style="margin-bottom:6px;">Быстрая вставка в чат</div>
+          <div class="v multiline" style="font-size:11px; font-weight:800;">${escapeHtml(copyText)}</div>
+        </div>
+      `;
+
+      $('#btnCopy').addEventListener('click', async ()=> {
+        await copyToClipboard(copyText);
+      });
+
+      btnToMap.onclick = ()=>{
+        if (!hasCoords) return;
+        setTab('map');
+        focusOnMap(ev.id, true);
+        closeSheet();
+      };
+    }
+
+    // ===== map =====
+    function ensureMap(){
+      if (map) return;
+      map = L.map('map', { zoomControl: true });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+
+      map.setView([59.93, 30.31], 10);
+      syncMapMarkers();
+    }
+
+    function clearMarkers(){
+      for (const m of markers.values()){
+        try{ m.remove(); }catch{}
+      }
+      markers.clear();
+    }
+
+    function markerHtml(color){
+      const c = color || '#3b82f6';
+      return `
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 22s7-4.5 7-12a7 7 0 1 0-14 0c0 7.5 7 12 7 12z" fill="${c}"/>
+          <circle cx="12" cy="10" r="3.2" fill="rgba(255,255,255,0.92)"/>
+        </svg>
+      `;
+    }
+
+    function syncMapMarkers(){
+      if (!map) return;
+      const src = filteredEvents;
+
+      clearMarkers();
+
+      for (const ev of src){
+        const p = ev.extendedProps || {};
+        const lat = p.lat, lng = p.lng;
+        const hide = !!p.hideMarker;
+
+        if (hide) continue;
+        if (lat === null || lng === null || lat === undefined || lng === undefined) continue;
+        if (String(lat).trim() === '' || String(lng).trim() === '') continue;
+
+        const color = ev.backgroundColor || p.color || '#3b82f6';
+        const icon = L.divIcon({
+          className: 'pin-marker',
+          html: markerHtml(color),
+          iconSize: [28,28],
+          iconAnchor: [14,26]
+        });
+
+        const m = L.marker([Number(lat), Number(lng)], { icon }).addTo(map);
+        m.on('click', ()=> selectEvent(ev.id, true));
+        markers.set(String(ev.id), m);
+      }
+    }
+
+    function focusOnMap(id, zoomIn){
+      if (!map) return;
+      const mid = String(id);
+      const m = markers.get(mid);
+      if (!m) return;
+
+      const ll = m.getLatLng();
+      const z = map.getZoom();
+      const targetZ = zoomIn ? Math.max(14, z) : z;
+      map.setView(ll, targetZ, { animate: true });
+
+      try{
+        m.setZIndexOffset(1000);
+        setTimeout(()=>m.setZIndexOffset(0), 900);
+      }catch{}
+    }
+
+    // ===== load events + SSE =====
+    async function loadEvents(){
+      try{
+        showLoader('Загрузка', 'Получаем события…');
+        const r = await apiFetch('/api/events?ts=' + Date.now());
+        if (!r.ok){
+          hideLoader();
+          toast('Не удалось загрузить /api/events');
+          return;
+        }
+        const j = await r.json();
+        const evs = (j && j.events) ? j.events : [];
+        allEvents = Array.isArray(evs) ? evs : [];
+        hideLoader();
+        applyFilter();
+
+        if (selectedId){
+          const ev = getEventById(selectedId);
+          if (!ev) selectedId = null;
+          else selectEvent(selectedId, false);
+        }
+      }catch(e){
+        hideLoader();
+        toast('Ошибка загрузки');
+      }
+    }
+
+    function connectSSE(){
+      try{
+        const es = new EventSource('/api/stream', { withCredentials: true });
+        es.onmessage = (e)=>{
+          try{
+            const msg = JSON.parse(e.data || '{}');
+            if (msg && msg.version) loadEvents();
+          }catch{}
+        };
+      }catch{}
+    }
+
+    // ===== week nav =====
+    $('#prevWeek').addEventListener('click', ()=>{
+      weekStart = addDays(weekStart, -7);
+      renderWeek();
+    });
+    $('#nextWeek').addEventListener('click', ()=>{
+      weekStart = addDays(weekStart, 7);
+      renderWeek();
+    });
+    $('#today').addEventListener('click', ()=>{
+      weekStart = startOfWeekMonday(new Date());
+      renderWeek();
+    });
+
+    // ===== boot =====
+    (async function init(){
+      await loadMe();
+      await loadEvents();
+      connectSSE();
+
+      // swipe to close sheet
+     /* let startY = null;
+      sheet.addEventListener('touchstart', (e)=>{
+        if (!e.touches || !e.touches[0]) return;
+        startY = e.touches[0].clientY;
+      }, { passive:true });
+      sheet.addEventListener('touchmove', (e)=>{
+        if (startY === null) return;
+        const y = e.touches[0].clientY;
+        const dy = y - startY;
+        if (dy > 80) { closeSheet(); startY = null; }
+      }, { passive:true });*/
+    })();
+  </script>
+</body>
+</html>

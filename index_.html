@@ -1,0 +1,2090 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Календарь + Карта (Bitrix) — Неделя</title>
+
+  <!-- FullCalendar -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .layout { display: flex; height: 100vh; width: 100vw; overflow: hidden; background:#f3f4f6; }
+
+    .left-pane{
+      display:flex; flex-direction:column; flex:1 1 55%;
+      border-right:1px solid #e5e7eb; min-width:0; height:100vh;
+      background:#fff;
+      overflow:hidden;
+    }
+
+    /* ✅ Карточка — без прокрутки в контейнере */
+    .card-pane{
+      flex:0 0 auto;
+      max-height: clamp(280px, 44vh, 560px);
+      border-bottom:1px solid #e5e7eb;
+      padding:8px 10px;
+      overflow:hidden;
+      background:linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
+    }
+
+    .calendar-pane{
+      flex:1 1 auto;
+      padding:10px 12px;
+      overflow:hidden;
+      min-height:0;
+      background:#fff;
+    }
+
+    /* ✅ Правая часть: топ-бар + карта */
+    .right-pane{
+      flex:1 1 45%;
+      height:100vh;
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      background:#fff;
+    }
+    .map-topbar{
+      flex:0 0 auto;
+      padding:10px 12px;
+      border-bottom:1px solid #e5e7eb;
+      background:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:flex-start;
+      gap:10px;
+      min-height:48px;
+      box-sizing:border-box;
+    }
+    #map{
+      flex:1 1 auto;
+      width:100%;
+      height:auto;
+    }
+
+    /* ==== Карточка ==== */
+    .card-wrap{
+      height:100%;
+      background:#ffffff;
+      border:1px solid #e5e7eb;
+      border-radius:16px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+      padding:8px;
+      box-sizing:border-box;
+      overflow:hidden;
+      transition: box-shadow .18s ease, border-color .18s ease;
+    }
+
+    /* ✅ желтое выделение активной карточки слева */
+    .card-wrap.card-selected{
+      border-color: rgba(245, 158, 11, 0.75);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08), 0 0 0 4px rgba(253, 224, 71, 0.35);
+    }
+
+    .card-title{
+      display:flex; gap:10px; align-items:center; justify-content:space-between;
+      margin:0 0 8px 0;
+      min-width:0;
+    }
+    .card-title h2{
+      margin:0;
+      font-size:13px;
+      font-weight:1000;
+      letter-spacing:0.2px;
+      color:#0f172a;
+      white-space:nowrap;
+    }
+
+    .subpill{
+      font-size:11px; padding:3px 9px; border-radius:999px;
+      border:1px solid #e5e7eb; background:#fff;
+      color:#334155;
+      display:inline-flex; align-items:center; gap:6px;
+      max-width:100%;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+
+    .section-title{
+      font-size:12px;
+      font-weight:900;
+      color:#0f172a;
+      margin:0 0 6px 0;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .card-columns{
+      display:grid;
+      grid-template-columns: 1fr 1.25fr;
+      gap:8px;
+      min-width:0;
+    }
+
+    .col{
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .box{
+      border:1px solid #e5e7eb;
+      background:#f8fafc;
+      border-radius:14px;
+      padding:7px;
+      min-width:0;
+      overflow:hidden;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 108px 1fr;
+      gap:4px 8px;
+      align-items:start;
+      font-size:12px;
+      line-height:1.2;
+      min-width:0;
+    }
+
+    .k{
+      color:#64748b;
+      font-weight:900;
+      padding-top:2px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .v{
+      color:#0f172a;
+      background:#ffffff;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      padding:6px 8px;
+      min-width:0;
+
+      overflow:hidden;
+      display:-webkit-box;
+      -webkit-box-orient:vertical;
+      -webkit-line-clamp:2;
+      line-height:1.25;
+      box-sizing:border-box;
+    }
+
+    .v.one-line{
+      display:block;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .big-field{
+      background:#ffffff;
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      padding:8px;
+      min-width:0;
+      box-shadow: inset 0 1px 0 rgba(15,23,42,0.04);
+      overflow:hidden;
+    }
+
+    .big-field .label{
+      font-size:12px;
+      font-weight:1000;
+      color:#0f172a;
+      margin:0 0 6px 0;
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+    }
+
+    .big-field .content{
+      font-size:12px;
+      line-height:1.35;
+      color:#0f172a;
+      white-space:pre-wrap;
+
+      overflow:hidden;
+      display:-webkit-box;
+      -webkit-box-orient:vertical;
+      -webkit-line-clamp:4;
+    }
+
+    .comment-area{
+      width:100%;
+      min-height:38px;
+      max-height:92px;
+      resize:none;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      padding:8px 10px;
+      font-size:12px;
+      outline:none;
+      background:#fff;
+      color:#0f172a;
+      box-sizing:border-box;
+    }
+
+    .done-toggle{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+      font-weight:900;
+      color:#0f172a;
+      user-select:none;
+      padding:6px 10px;
+      border:1px solid #e5e7eb;
+      border-radius:999px;
+      background:#fff;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .done-toggle input{
+      width:16px;
+      height:16px;
+      accent-color: #16a34a;
+      cursor:pointer;
+    }
+    .done-toggle .state{ font-weight:1000; }
+    .done-toggle .state.done{ color:#16a34a; }
+    .done-toggle .state.todo{ color:#dc2626; }
+    .done-toggle.disabled{
+      opacity:0.65;
+      cursor:not-allowed;
+      background:#f8fafc;
+    }
+    .done-toggle.disabled input{ cursor:not-allowed; }
+
+    .btn{
+      appearance:none;
+      border:1px solid #e5e7eb;
+      background:#fff;
+      color:#0f172a;
+      font-weight:1000;
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .btn:hover{ background:#f8fafc; }
+    .btn.danger{
+      border-color: rgba(220,38,38,0.35);
+      color:#991b1b;
+      background:#fff;
+    }
+    .btn.danger:hover{ background:#fee2e2; }
+
+    /* ==== Календарь ==== */
+    #calendar{
+      height:100%;
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:16px;
+      padding:8px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+      box-sizing:border-box;
+    }
+
+    .fc .fc-toolbar-title{ font-size:15px; color:#0f172a; font-weight:900; }
+    .fc .fc-button{ border-radius:10px !important; }
+    .fc .fc-daygrid-day-number{ font-size:12px; padding:6px; color:#334155; font-weight:800; }
+
+    .fc .fc-daygrid-event{
+      border-radius:14px;
+      padding:8px 10px;
+      margin:8px 8px 0 8px;
+      position:relative; /* нужно для желтой подсветки */
+      overflow:hidden;
+    }
+
+    .fc .fc-daygrid-event .fc-event-main{ position:relative; z-index:1; }
+
+    .fc .fc-daygrid-event .fc-event-title,
+    .fc .fc-daygrid-event .fc-event-title-container{
+      display:none !important;
+    }
+
+    .fc .fc-event-time{ display:none !important; }
+
+    /* ✅ желтое выделение выбранного события в календаре */
+    .ev-selected{
+      outline: 2px solid rgba(245, 158, 11, 0.95) !important;
+      box-shadow: 0 0 0 4px rgba(253, 224, 71, 0.35) !important;
+      transform: translateZ(0);
+    }
+    .fc .fc-daygrid-event.ev-selected::after{
+      content:'';
+      position:absolute;
+      inset:0;
+      background: rgba(253, 224, 71, 0.22);
+      pointer-events:none;
+      z-index:0;
+    }
+
+    /* ✅ "темно-серые" карточки: белый текст */
+    .ev-black{
+      color:#f8fafc !important;
+    }
+
+    /* ✅ краткая карточка внутри события */
+    .ev-mini{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .ev-mini-line{
+      font-size:11px;
+      font-weight:1000;
+      line-height:1.2;
+      color: inherit;          /* <= важно для белого текста в темных */
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      opacity:0.95;
+    }
+
+    /* ✅ плашка выполнено/невыполнено в событии */
+    .ev-mini-badge{
+      align-self:flex-start;
+      font-size:10px;
+      font-weight:1000;
+      line-height:1;
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid rgba(15,23,42,0.20);
+      background: rgba(255,255,255,0.72);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      color:#0f172a;
+      white-space:nowrap;
+    }
+    .ev-black .ev-mini-badge{
+      border-color: rgba(255,255,255,0.28);
+      background: rgba(255,255,255,0.16);
+      color:#ffffff;
+    }
+
+    /* ===== MODAL (ручная карточка) ===== */
+    .modal-backdrop{
+      position:fixed; inset:0;
+      background: rgba(15,23,42,0.45);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      z-index:9999;
+    }
+    .modal-backdrop.open{ display:flex; }
+
+    .modal{
+      width: min(920px, 96vw);
+      max-height: 92vh;
+      overflow:auto;
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:18px;
+      box-shadow: 0 18px 40px rgba(15,23,42,0.25);
+      padding:12px;
+    }
+    .modal-head{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+      padding:6px 6px 10px 6px;
+      border-bottom:1px solid #e5e7eb;
+      margin-bottom:10px;
+    }
+    .modal-title{
+      margin:0;
+      font-size:13px;
+      font-weight:1000;
+      color:#0f172a;
+    }
+    .modal-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .field{
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      padding:10px;
+      background:#f8fafc;
+    }
+    .field label{
+      display:block;
+      font-size:11px;
+      font-weight:900;
+      color:#334155;
+      margin-bottom:6px;
+    }
+    .field input, .field textarea{
+      width:100%;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      padding:8px 10px;
+      font-size:12px;
+      outline:none;
+      background:#fff;
+      color:#0f172a;
+      box-sizing:border-box;
+    }
+    .field textarea{ min-height:88px; resize:vertical; }
+    .modal-actions{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+      padding-top:10px;
+      border-top:1px solid #e5e7eb;
+      margin-top:10px;
+    }
+    .hint{
+      font-size:11px;
+      color:#475569;
+      font-weight:800;
+    }
+
+    /* ===== MAP PICKER MODAL ===== */
+    .pick-modal{
+      width: min(980px, 96vw);
+      max-height: 92vh;
+      overflow:hidden;
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:18px;
+      box-shadow: 0 18px 40px rgba(15,23,42,0.25);
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    #pick-map{
+      height: min(62vh, 640px);
+      min-height: 360px;
+      width:100%;
+      border-radius:16px;
+      border:1px solid #e5e7eb;
+      overflow:hidden;
+    }
+    .pick-actions{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding-top:8px;
+      border-top:1px solid #e5e7eb;
+    }
+    .pick-status{
+      font-size:11px;
+      font-weight:900;
+      color:#0f172a;
+      padding:6px 10px;
+      border:1px solid #e5e7eb;
+      border-radius:999px;
+      background:#f8fafc;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width: 60%;
+    }
+
+    /* ===== SEARCH (поиск по событиям) ===== */
+    .searchbar{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      width: min(780px, 100%);
+      max-width: 980px;
+    }
+    .searchbar .search-input{
+      flex:1 1 auto;
+      min-width: 220px;
+      border:1px solid #e5e7eb;
+      border-radius:999px;
+      padding:8px 12px;
+      font-size:12px;
+      outline:none;
+      background:#fff;
+      color:#0f172a;
+      box-sizing:border-box;
+    }
+    .searchbar .search-input::placeholder{ color:#94a3b8; font-weight:800; }
+    .searchbar .search-clear{ padding:6px 10px; }
+    .ev-hidden{ display:none !important; }
+
+    /* ===== Day header checkbox (выбор дня) ===== */
+    .dayhdr{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+      padding:2px 0;
+      user-select:none;
+    }
+    .dayhdr input.dayhdr-cb{
+      width:14px;
+      height:14px;
+      accent-color:#0f172a;
+      cursor:pointer;
+    }
+    .dayhdr-text{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:1px;
+      line-height:1.05;
+      cursor:pointer;
+    }
+    .dayhdr-dow{
+      font-size:11px;
+      font-weight:1000;
+      color:#0f172a;
+      text-transform: capitalize;
+    }
+    .dayhdr-date{
+      font-size:10px;
+      font-weight:900;
+      color:#64748b;
+    }
+    .fc .fc-col-header-cell-cushion{
+      padding:4px 2px !important;
+    }
+
+    /* ===== LOADER ===== */
+    .loading-backdrop{
+      position: fixed;
+      inset: 0;
+      z-index: 20000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(15, 23, 42, 0.35);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+    .loading-backdrop.open{ display:flex; }
+
+    .loading-card{
+      width: min(520px, 92vw);
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(15,23,42,0.25);
+      padding: 14px 16px;
+      display:flex;
+      align-items:center;
+      gap: 12px;
+    }
+
+    .loading-spinner{
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #0f172a;
+      animation: spin 0.9s linear infinite;
+      flex: 0 0 auto;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text{
+      display:flex;
+      flex-direction:column;
+      gap: 2px;
+      min-width:0;
+    }
+    .loading-title{
+      font-size: 13px;
+      font-weight: 1000;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+    .loading-sub{
+      font-size: 12px;
+      font-weight: 800;
+      color: #475569;
+      line-height: 1.2;
+    }
+
+    /* ✅ Адрес — показываем полностью */
+    .v.v-address{
+      display:block;
+      -webkit-line-clamp: unset;
+      overflow: visible;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+
+<body>
+<div class="layout">
+  <div class="left-pane">
+    <div class="card-pane">
+      <div class="card-wrap" id="card-wrap">
+        <div class="card-title">
+          <div style="display:flex; gap:10px; align-items:center; min-width:0;">
+            <h2>Карточка</h2>
+          </div>
+
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn danger" id="btn-delete-manual" style="display:none;">Удалить ручную</button>
+
+            <label class="done-toggle" id="ev-done-wrap" title="Для “выполнено” берётся из Bitrix; для остальных — локально в браузере">
+              <input type="checkbox" id="ev-done" />
+              <span>Статус:</span>
+              <span class="state todo" id="ev-done-text">Невыполнено</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="card-columns">
+          <!-- LEFT -->
+          <div class="col">
+            <div class="box">
+              <div class="section-title">
+                <span>Адрес</span>
+                <span class="subpill" id="ev-color-pill">Цвет: —</span>
+              </div>
+
+              <div class="grid">
+                <div class="k">№ заказа</div><div class="v one-line" id="ev-title">—</div>
+                <div class="k">Менеджер</div><div class="v one-line" id="ev-manager">—</div>
+                <div class="k">Тип камня</div><div class="v one-line" id="ev-stone">—</div>
+                <div class="k">Адрес</div><div class="v v-address" id="ev-address">—</div>
+
+                <div class="k">Lat/Lng</div><div class="v one-line" id="ev-ll">—</div>
+                <div class="k">Телефон</div><div class="v one-line" id="ev-phone">—</div>
+              </div>
+            </div>
+
+            <div class="big-field">
+              <div class="label"><span>Монтажники</span></div>
+              <div class="v" id="ev-installers">—</div>
+            </div>
+          </div>
+
+          <!-- RIGHT -->
+          <div class="col">
+            <div class="box">
+              <div class="section-title">
+                <span>Даты монтажа</span>
+              </div>
+
+              <div class="grid">
+                <div class="k">План</div><div class="v one-line" id="ev-plan">—</div>
+                <div class="k">Назначено</div><div class="v one-line" id="ev-assigned">—</div>
+              </div>
+            </div>
+
+            <div class="big-field">
+              <div class="label"><span>Комментарий к монтажу</span></div>
+              <div class="content" id="ev-install">—</div>
+            </div>
+
+            <div class="big-field">
+              <div class="label">
+                <span>Комментарий свободный</span>
+                <button class="btn" id="btn-save-free" title="Сохранить на сервере">Сохранить</button>
+              </div>
+              <textarea class="comment-area" id="ev-free" placeholder="Можно писать любые заметки…"></textarea>
+              <div class="hint" id="ev-free-hint" style="margin-top:6px;">—</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="calendar-pane">
+      <div id="calendar"></div>
+    </div>
+  </div>
+
+  <div class="right-pane">
+    <div class="map-topbar">
+      <div class="searchbar" title="Поиск по событиям (календарь + маркеры)">
+        <input class="search-input" id="ev-search" placeholder="Поиск по событиям… (№, адрес, телефон, камень, менеджер)" />
+        <button class="btn search-clear" id="ev-search-clear" type="button">✕</button>
+        <span class="subpill" id="ev-search-count">Поиск</span>
+      </div>
+    </div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<!-- ===== Modal: add manual card ===== -->
+<div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head">
+      <div>
+        <h3 class="modal-title" id="modal-title">Добавить ручную карточку</h3>
+        <div class="hint">Координаты выбираются через отдельное окно с картой.</div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn" id="modal-close">Закрыть</button>
+      </div>
+    </div>
+
+    <div class="modal-grid">
+      <div class="field">
+        <label>№ заказа / Заголовок</label>
+        <input id="m-title" placeholder="Напр.: 999К — Столешница" />
+      </div>
+
+      <div class="field">
+        <label>Телефон</label>
+        <input id="m-phone" placeholder="8..." />
+      </div>
+
+      <div class="field">
+        <label>Адрес</label>
+        <input id="m-address" placeholder="Введите адрес (можно без геокодинга)" />
+      </div>
+
+      <div class="field">
+        <label>Координаты (lat, lng)</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="m-latlng" placeholder="Нажми “Выбрать на карте”" />
+          <button class="btn" id="btn-pick-coords" type="button">Выбрать на карте</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Тип камня / Материал</label>
+        <input id="m-stone" placeholder="Напр.: Акрил / Кварц / UC014 Mist White" />
+      </div>
+
+      <div class="field">
+        <label>Толщина</label>
+        <input id="m-thickness" placeholder="Напр.: 20 мм" />
+      </div>
+
+      <div class="field">
+        <label>План монтажа (дата)</label>
+        <input id="m-plan" type="date" />
+      </div>
+
+      <div class="field">
+        <label>Назначено (дата/время)</label>
+        <input id="m-assigned" type="datetime-local" />
+      </div>
+
+      <div class="field" style="grid-column: 1 / -1;">
+        <label>Комментарий к монтажу</label>
+        <textarea id="m-install" placeholder="Комментарий к монтажу..."></textarea>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <div class="hint">Ручные карточки: красные, хранятся на сервере, видны всем, удаляются кнопкой в карточке.</div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="modal-cancel">Отмена</button>
+        <button class="btn" id="modal-save" style="font-weight:1000;">Добавить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: pick coordinates on map ===== -->
+<div class="modal-backdrop" id="pick-backdrop" aria-hidden="true" style="z-index:10050;">
+  <div class="pick-modal" role="dialog" aria-modal="true" aria-labelledby="pick-title">
+    <div class="modal-head" style="margin:0; border-bottom:1px solid #e5e7eb;">
+      <div>
+        <h3 class="modal-title" id="pick-title">Выбор точки на карте</h3>
+        <div class="hint">Кликни по карте — появится маркер. Затем нажми “Готово”.</div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn" id="pick-close" type="button">Закрыть</button>
+      </div>
+    </div>
+
+    <div id="pick-map"></div>
+
+    <div class="pick-actions">
+      <div class="pick-status" id="pick-status">Точка не выбрана</div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="pick-cancel" type="button">Отмена</button>
+        <button class="btn" id="pick-ok" type="button" style="font-weight:1000;">Готово</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== LOADER OVERLAY ===== -->
+<div class="loading-backdrop" id="loading" aria-hidden="true">
+  <div class="loading-card" role="status" aria-live="polite">
+    <div class="loading-spinner" aria-hidden="true"></div>
+    <div class="loading-text">
+      <div class="loading-title" id="loading-title">Данные загружаются…</div>
+      <div class="loading-sub" id="loading-sub">Пожалуйста, подождите</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== визуальная настройка "черных" =====
+  const BLACK_BG = '#374151';      // темно-серый (читабельный)
+  const BLACK_BG_ALT = '#111827';  // на случай если сервер ещё отдает почти-черный
+
+  function isBlackByColor(c){
+    const s = String(c || '').trim().toLowerCase();
+    return s === BLACK_BG.toLowerCase() || s === BLACK_BG_ALT.toLowerCase();
+  }
+  function isBlackEventProps(p, fallbackColor){
+    if (p && p.isBlack === true) return true;
+    return isBlackByColor(p?.color || fallbackColor);
+  }
+
+  // ===== done state (localStorage) =====
+  function doneKey(id) { return `b24cal_done_${String(id)}`; }
+  function getDone(id) { return localStorage.getItem(doneKey(id)) === '1'; }
+  function setDone(id, val) { localStorage.setItem(doneKey(id), val ? '1' : '0'); }
+
+  function applyDoneUi(isDone) {
+    const elDoneText = document.getElementById('ev-done-text');
+    if (!elDoneText) return;
+    if (isDone) {
+      elDoneText.textContent = 'Выполнено';
+      elDoneText.classList.remove('todo');
+      elDoneText.classList.add('done');
+    } else {
+      elDoneText.textContent = 'Невыполнено';
+      elDoneText.classList.remove('done');
+      elDoneText.classList.add('todo');
+    }
+  }
+
+  function setDoneReadonly(readonly){
+    const wrap = document.getElementById('ev-done-wrap');
+    const cb = document.getElementById('ev-done');
+    if (!wrap || !cb) return;
+    cb.disabled = !!readonly;
+    wrap.classList.toggle('disabled', !!readonly);
+  }
+
+  function computeDone(p, id){
+    if (p && p.isDone === true) return true;
+    if (p && typeof p.done === 'boolean') return p.done;
+    return getDone(id);
+  }
+
+  // ===== utils =====
+  function safeText(v){ return (v === null || v === undefined) ? '' : String(v); }
+  function toNum(v){
+    if (v === null || v === undefined) return null;
+    const n = Number(String(v).trim().replace(',', '.'));
+    return Number.isNaN(n) ? null : n;
+  }
+  function isDateOnlyString(v){
+    return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.trim());
+  }
+  function fmtDate(v){
+    if (!v) return '';
+    try {
+      if (isDateOnlyString(v)) {
+        const [y,m,d] = v.split('-').map(x => Number(x));
+        const dt = new Date(y, m - 1, d);
+        return dt.toLocaleDateString('ru-RU');
+      }
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return String(v);
+      return d.toLocaleString('ru-RU');
+    } catch {
+      return String(v);
+    }
+  }
+  function fmtDateShort(v){
+    if (!v) return '';
+    try {
+      if (isDateOnlyString(v)) {
+        const [y,m,d] = v.split('-').map(x => Number(x));
+        const dt = new Date(y, m - 1, d);
+        return dt.toLocaleDateString('ru-RU');
+      }
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return String(v);
+      return d.toLocaleDateString('ru-RU');
+    } catch {
+      return String(v);
+    }
+  }
+
+  function dateKeyLocal(d){
+    if (!d) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function getStoneText(p){
+    return String((p && (p.stoneText || p.stoneType || p.stoneCode || p.materialCode)) || '').trim();
+  }
+  function getManagerText(p){
+    const name = String((p && p.managerName) || '').trim();
+    if (name) return name;
+    const id = (p && p.managerId) ? String(p.managerId).trim() : '';
+    return id ? `ID ${id}` : '';
+  }
+  function getInstallersText(p){
+    const names = (p && Array.isArray(p.installersNames)) ? p.installersNames.filter(Boolean).map(String) : [];
+    if (names.length) return names.join('\n');
+    const ids = (p && Array.isArray(p.installersIds)) ? p.installersIds.filter(Boolean).map(x => `ID ${x}`) : [];
+    if (ids.length) return ids.join('\n');
+    return '';
+  }
+
+  // ====== MAP (main) ======
+  const SPB = { lat: 59.9311, lng: 30.3609, zoom: 11 };
+  const map = L.map('map').setView([SPB.lat, SPB.lng], SPB.zoom);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  setTimeout(() => { try { map.invalidateSize(); } catch {} }, 0);
+  window.addEventListener('resize', () => { try { map.invalidateSize(); } catch {} });
+
+  const eventMarkers = {};
+
+  function popupHtml(fcEvent){
+    const p = fcEvent.extendedProps || {};
+    const order = (p.orderNumber && String(p.orderNumber).trim()) || (String(fcEvent.title || '').split('—')[0] || '').trim();
+    const addr = (p.address || '').trim();
+    const stone = getStoneText(p);
+    const manager = getManagerText(p);
+
+    const line = (label, val) => val ? `<div><b>${label}:</b> ${safeText(val)}</div>` : '';
+    return `
+      <div style="min-width:220px">
+        ${line('№', order)}
+        ${line('Адрес', addr)}
+        ${line('Камень', stone)}
+        ${line('Менеджер', manager)}
+      </div>
+    `;
+  }
+
+  function setOrUpdateMarker(eventId, lat, lng, color, fcEvent){
+    const p = fcEvent?.extendedProps || {};
+    if (p.hideMarker === true) return;
+    if (lat === null || lng === null) return;
+
+    let c = color || '#3b82f6';
+    if (isBlackEventProps(p, c)) c = BLACK_BG;
+
+    let marker = eventMarkers[eventId];
+
+    if (!marker) {
+      marker = L.circleMarker([lat, lng], {
+        radius: 8, weight: 2,
+        color: c, fillColor: c, fillOpacity: 0.85
+      }).addTo(map);
+
+      marker.on('click', () => {
+        selectEventById(eventId, { focusMap: false });
+      });
+
+      eventMarkers[eventId] = marker;
+    } else {
+      marker.setLatLng([lat, lng]);
+      marker.setStyle({ color: c, fillColor: c });
+    }
+
+    marker.bindPopup(popupHtml(fcEvent));
+  }
+
+  function removeMarker(eventId){
+    const m = eventMarkers[String(eventId)];
+    if (!m) return;
+    map.removeLayer(m);
+    delete eventMarkers[String(eventId)];
+  }
+
+  function clearAllMarkers() {
+    for (const m of Object.values(eventMarkers)) map.removeLayer(m);
+    for (const k of Object.keys(eventMarkers)) delete eventMarkers[k];
+  }
+
+  function setMarkerVisibility(eventId, visible){
+    const key = String(eventId);
+    const m = eventMarkers[key];
+    if (!m) return;
+    const onMap = map.hasLayer(m);
+    if (visible && !onMap) m.addTo(map);
+    if (!visible && onMap) {
+      try { m.closePopup(); } catch {}
+      map.removeLayer(m);
+    }
+  }
+
+  // ====== CARD DOM ======
+  const cardWrapEl = document.getElementById('card-wrap');
+
+  const elTitle = document.getElementById('ev-title');
+  const elAddr = document.getElementById('ev-address');
+  const elLL = document.getElementById('ev-ll');
+  const elPhone = document.getElementById('ev-phone');
+  const elStone = document.getElementById('ev-stone');
+
+  const elInstall = document.getElementById('ev-install');
+
+  const elColorPill = document.getElementById('ev-color-pill');
+  const elPlan = document.getElementById('ev-plan');
+  const elAssigned = document.getElementById('ev-assigned');
+  const elDone = document.getElementById('ev-done');
+  const btnDeleteManual = document.getElementById('btn-delete-manual');
+
+  const elManager = document.getElementById('ev-manager');
+  const elInstallers = document.getElementById('ev-installers');
+
+  const elFree = document.getElementById('ev-free');
+  const btnSaveFree = document.getElementById('btn-save-free');
+  const elFreeHint = document.getElementById('ev-free-hint');
+
+  // ====== SEARCH DOM ======
+  const elSearch = document.getElementById('ev-search');
+  const elSearchClear = document.getElementById('ev-search-clear');
+  const elSearchCount = document.getElementById('ev-search-count');
+
+  // ====== CALENDAR ======
+  const calendarEl = document.getElementById('calendar');
+  let selectedEventId = null;
+  let lastVersion = null;
+
+  // ===== LOADER =====
+  const loadingEl = document.getElementById('loading');
+  const loadingTitleEl = document.getElementById('loading-title');
+  const loadingSubEl = document.getElementById('loading-sub');
+  let loadingCounter = 0;
+
+  function setLoading(on, title, sub){
+    if (!loadingEl) return;
+
+    if (on) loadingCounter++;
+    else loadingCounter = Math.max(0, loadingCounter - 1);
+
+    const show = loadingCounter > 0;
+
+    if (show) {
+      if (loadingTitleEl) loadingTitleEl.textContent = title || 'Данные загружаются…';
+      if (loadingSubEl) loadingSubEl.textContent = sub || 'Пожалуйста, подождите';
+      loadingEl.classList.add('open');
+      loadingEl.setAttribute('aria-hidden', 'false');
+    } else {
+      loadingEl.classList.remove('open');
+      loadingEl.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function setCardSelected(on){
+    if (!cardWrapEl) return;
+    cardWrapEl.classList.toggle('card-selected', !!on);
+  }
+
+  function clearSelectedInDom() {
+    const prev = calendarEl.querySelectorAll('.ev-selected');
+    prev.forEach(el => el.classList.remove('ev-selected'));
+  }
+
+  function markSelectedInDomByEventId(id) {
+    clearSelectedInDom();
+    const targetId = String(id);
+    const els = calendarEl.querySelectorAll(`[data-event-id="${CSS.escape(targetId)}"]`);
+    els.forEach(el => el.classList.add('ev-selected'));
+  }
+
+  function ensureMiniCard(eventEl, fcEvent){
+    const prev = eventEl.querySelector('.ev-mini');
+    if (prev) prev.remove();
+
+    const p = (fcEvent && fcEvent.extendedProps) ? fcEvent.extendedProps : {};
+    const order =
+      (p.orderNumber && String(p.orderNumber).trim()) ||
+      (String(fcEvent?.title || '').split('—')[0] || '').trim();
+
+    const stone = getStoneText(p);
+    const plan  = p.plannedInstall ? fmtDateShort(p.plannedInstall) : '';
+    const isDone = computeDone(p, fcEvent?.id);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'ev-mini';
+
+    const badge = document.createElement('div');
+    badge.className = 'ev-mini-badge';
+    badge.textContent = isDone ? '✅ Выполнено' : '⏳ Невыполнено';
+    wrap.appendChild(badge);
+
+    const add = (txt) => {
+      if (!txt) return;
+      const d = document.createElement('div');
+      d.className = 'ev-mini-line';
+      d.textContent = txt;
+      wrap.appendChild(d);
+    };
+
+    add(order ? `№ ${order}` : '');
+    add(stone ? `🪨 ${stone}` : '');
+    add(plan ? `📅 ${plan}` : '');
+
+    const main = eventEl.querySelector('.fc-event-main') || eventEl;
+    main.prepend(wrap);
+  }
+
+  const eventElsById = new Map();
+  function rememberEventEl(id, el) {
+    const key = String(id);
+    let set = eventElsById.get(key);
+    if (!set) { set = new Set(); eventElsById.set(key, set); }
+    set.add(el);
+  }
+  function forgetEventEl(id, el) {
+    const key = String(id);
+    const set = eventElsById.get(key);
+    if (!set) return;
+    set.delete(el);
+    if (set.size === 0) eventElsById.delete(key);
+  }
+  function updateMiniForId(id) {
+    const key = String(id);
+    const set = eventElsById.get(key);
+    if (!set) return;
+    const ev = calendar.getEventById(key);
+    if (!ev) return;
+    for (const el of set) ensureMiniCard(el, ev);
+  }
+
+  function refreshSelectedClass(){
+    if (selectedEventId) markSelectedInDomByEventId(selectedEventId);
+  }
+
+  function isManualId(id){ return String(id).startsWith('m-'); }
+  function setDeleteButtonVisibility(ev){
+    const id = String(ev?.id || '');
+    if (btnDeleteManual) btnDeleteManual.style.display = isManualId(id) ? '' : 'none';
+  }
+
+  async function saveFreeComment(id, text){
+    const r = await fetch(`/api/comment/${encodeURIComponent(String(id))}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ text: String(text || '') })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+
+  // ===== SEARCH (поиск) =====
+  let searchQuery = '';
+  let searchTimer = null;
+  const searchCache = new Map(); // id -> normalized haystack
+
+  function normSearch(s){
+    return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function buildHaystack(ev){
+    const p = ev?.extendedProps || {};
+    const hay = [
+      ev?.title,
+      p.orderNumber,
+      p.customerName,
+      p.address,
+      p.rawAddress,
+      p.phone,
+      getStoneText(p),
+      getManagerText(p),
+      getInstallersText(p),
+      p.installComment,
+      p.extraComment,
+      p.freeComment
+    ].filter(Boolean).join(' ');
+    return normSearch(hay);
+  }
+
+  function getHaystack(ev){
+    const id = String(ev?.id ?? '');
+    if (!id) return '';
+    const cached = searchCache.get(id);
+    if (cached !== undefined) return cached;
+    const h = buildHaystack(ev);
+    searchCache.set(id, h);
+    return h;
+  }
+
+  function isMatchSearch(ev, q){
+    const nq = normSearch(q);
+    if (!nq) return true;
+    return getHaystack(ev).includes(nq);
+  }
+
+  // ===== DAY FILTER (чекбоксы в заголовках дней недели) =====
+  let weekKeys = [];
+  let selectedDayKeys = new Set();
+
+  function isWeekView(){
+    return calendar && calendar.view && calendar.view.type === 'dayGridWeek';
+  }
+
+  function eventDayKey(ev){
+    if (!ev || !ev.start) return '';
+    return dateKeyLocal(ev.start);
+  }
+
+  function matchDayFilterForMarker(ev){
+    if (!isWeekView()) return true;
+    if (!weekKeys.length) return true;
+
+    if (selectedDayKeys.size === 0) return false;
+    if (selectedDayKeys.size === weekKeys.length) return true;
+
+    const k = eventDayKey(ev);
+    return k ? selectedDayKeys.has(k) : true;
+  }
+
+  function updateDayHeaderCheckboxes(){
+    const boxes = calendarEl.querySelectorAll('input.dayhdr-cb[data-day-key]');
+    boxes.forEach((cb) => {
+      const k = cb.getAttribute('data-day-key') || '';
+      cb.checked = selectedDayKeys.has(k);
+    });
+  }
+
+  function applyMarkerFilterOnly(){
+    const q = normSearch(searchQuery);
+    const events = calendar.getEvents();
+    for (const ev of events) {
+      const p = ev.extendedProps || {};
+      if (p.hideMarker === true) continue;
+
+      const okSearch = !q || isMatchSearch(ev, q);
+      const okDay = matchDayFilterForMarker(ev);
+      setMarkerVisibility(ev.id, okSearch && okDay);
+    }
+  }
+
+  function applySearchFilter(){
+    const q = normSearch(searchQuery);
+    let found = 0;
+
+    const events = calendar.getEvents();
+    for (const ev of events) {
+      const okSearch = !q || isMatchSearch(ev, q);
+      if (okSearch) found++;
+
+      const set = eventElsById.get(String(ev.id));
+      if (set) {
+        for (const el of set) el.classList.toggle('ev-hidden', !okSearch);
+      }
+
+      const p = ev.extendedProps || {};
+      if (p.hideMarker === true) continue;
+
+      const okDay = matchDayFilterForMarker(ev);
+      setMarkerVisibility(ev.id, okSearch && okDay);
+    }
+
+    if (elSearchCount) {
+      elSearchCount.textContent = q ? `Найдено: ${found}` : 'Поиск';
+    }
+  }
+
+  function scheduleSearchApply(){
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(applySearchFilter, 120);
+  }
+
+  // ✅ клиентский fallback coords
+  let geocodeInFlight = new Set();
+  async function ensureCoordsForEvent(ev) {
+    try {
+      if (!ev) return false;
+      const p = ev.extendedProps || {};
+      if (p.hideMarker === true || p.isDone === true) return false;
+
+      const lat = toNum(p.lat);
+      const lng = toNum(p.lng);
+      if (lat !== null && lng !== null) return true;
+
+      const addr = String(p.address || '').trim();
+      if (!addr) return false;
+
+      const key = String(ev.id);
+      if (geocodeInFlight.has(key)) return false;
+      geocodeInFlight.add(key);
+
+      const r = await fetch(`/api/geocode?address=${encodeURIComponent(addr)}`, { headers: { 'Accept': 'application/json' }});
+      if (!r.ok) return false;
+      const g = await r.json();
+      if (!g || !g.ok) return false;
+
+      const la = toNum(g.lat);
+      const lo = toNum(g.lng);
+      if (la === null || lo === null) return false;
+
+      ev.setExtendedProp('lat', la);
+      ev.setExtendedProp('lng', lo);
+
+      if (selectedEventId && String(selectedEventId) === String(ev.id)) {
+        elLL.textContent = `${la.toFixed(6)}; ${lo.toFixed(6)}`;
+      }
+
+      let c = (p.color || ev.backgroundColor || '#3b82f6');
+      if (isBlackEventProps(p, c)) c = BLACK_BG;
+
+      setOrUpdateMarker(String(ev.id), la, lo, c, {
+        id: String(ev.id),
+        title: ev.title,
+        backgroundColor: c,
+        extendedProps: { ...p, lat: la, lng: lo }
+      });
+
+      applyMarkerFilterOnly();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      geocodeInFlight.delete(String(ev?.id || ''));
+    }
+  }
+
+  function setCardFromEvent(ev){
+    const p = ev.extendedProps || {};
+
+    setCardSelected(true);
+
+    elTitle.textContent = safeText(p.orderNumber || ev.title) || '—';
+
+    elAddr.textContent = safeText(p.address || '') || '—';
+    elPhone.textContent = safeText(p.phone || '') || '—';
+    elStone.textContent = getStoneText(p) || '—';
+
+    elManager.textContent = getManagerText(p) || '—';
+    elInstallers.textContent = getInstallersText(p) || '—';
+
+    const lat = toNum(p.lat);
+    const lng = toNum(p.lng);
+    elLL.textContent = (lat !== null && lng !== null) ? `${lat.toFixed(6)}; ${lng.toFixed(6)}` : '—';
+
+    let col = safeText(p.color || ev.backgroundColor || '') || '—';
+    if (isBlackEventProps(p, col)) col = BLACK_BG;
+    elColorPill.textContent = `Цвет: ${col}`;
+
+    elPlan.textContent = p.plannedInstall ? fmtDate(p.plannedInstall) : '—';
+    elAssigned.textContent = p.assignedInstall ? fmtDate(p.assignedInstall) : '—';
+
+    const install = safeText(p.installComment || '').trim();
+    elInstall.textContent = install || '—';
+
+    if (elFree) elFree.value = safeText(p.freeComment || '');
+    if (elFreeHint) elFreeHint.textContent = '';
+
+    const done = computeDone(p, ev.id);
+    if (elDone) {
+      elDone.checked = !!done;
+      applyDoneUi(!!done);
+      setDoneReadonly(p.isDone === true);
+    }
+
+    setDeleteButtonVisibility(ev);
+
+    if (p.hideMarker !== true && lat !== null && lng !== null) {
+      let c = (p.color || ev.backgroundColor || '#3b82f6');
+      if (isBlackEventProps(p, c)) c = BLACK_BG;
+      setOrUpdateMarker(ev.id, lat, lng, c, ev);
+      applyMarkerFilterOnly();
+    }
+  }
+
+  // ===== Modal logic (ручные) =====
+  const modalBackdrop = document.getElementById('modal-backdrop');
+  const modalClose = document.getElementById('modal-close');
+  const modalCancel = document.getElementById('modal-cancel');
+  const modalSave = document.getElementById('modal-save');
+
+  const mTitle = document.getElementById('m-title');
+  const mPhone = document.getElementById('m-phone');
+  const mAddress = document.getElementById('m-address');
+  const mLatLng = document.getElementById('m-latlng');
+  const mStone = document.getElementById('m-stone');
+  const mThickness = document.getElementById('m-thickness');
+  const mPlan = document.getElementById('m-plan');
+  const mAssigned = document.getElementById('m-assigned');
+  const mInstall = document.getElementById('m-install');
+
+  function openModal(){
+    modalBackdrop.classList.add('open');
+    modalBackdrop.setAttribute('aria-hidden','false');
+
+    mTitle.value = '';
+    mPhone.value = '';
+    mAddress.value = '';
+    mLatLng.value = '';
+    mStone.value = '';
+    mThickness.value = '';
+    mPlan.value = '';
+    mAssigned.value = '';
+    mInstall.value = '';
+
+    try {
+      const d = new Date();
+      mPlan.value = d.toISOString().slice(0,10);
+    } catch {}
+  }
+
+  function closeModal(){
+    modalBackdrop.classList.remove('open');
+    modalBackdrop.setAttribute('aria-hidden','true');
+  }
+
+  if (modalClose) modalClose.addEventListener('click', closeModal);
+  if (modalCancel) modalCancel.addEventListener('click', closeModal);
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) closeModal();
+    });
+  }
+
+  // ===== Pick coordinates modal =====
+  const btnPickCoords = document.getElementById('btn-pick-coords');
+  const pickBackdrop = document.getElementById('pick-backdrop');
+  const pickClose = document.getElementById('pick-close');
+  const pickCancel = document.getElementById('pick-cancel');
+  const pickOk = document.getElementById('pick-ok');
+  const pickStatus = document.getElementById('pick-status');
+
+  let pickMap = null;
+  let pickMarker = null;
+  let pickedLat = null;
+  let pickedLng = null;
+
+  function parseLatLngFromInput(str){
+    const s = String(str || '').trim();
+    if (!s) return null;
+    let a=null,b=null;
+    if (s.includes(';')) [a,b] = s.split(';');
+    else if (s.includes(',')) [a,b] = s.split(',');
+    else return null;
+    const la = toNum(a);
+    const lo = toNum(b);
+    if (la === null || lo === null) return null;
+    return { lat: la, lng: lo };
+  }
+
+  function setPickStatus(){
+    if (!pickStatus) return;
+    if (pickedLat === null || pickedLng === null) {
+      pickStatus.textContent = 'Точка не выбрана';
+      return;
+    }
+    pickStatus.textContent = `Выбрано: ${Number(pickedLat).toFixed(6)}; ${Number(pickedLng).toFixed(6)}`;
+  }
+
+  function openPickModal(){
+    pickBackdrop.classList.add('open');
+    pickBackdrop.setAttribute('aria-hidden','false');
+
+    const fromInput = parseLatLngFromInput(mLatLng.value);
+    const center = fromInput
+      ? [fromInput.lat, fromInput.lng]
+      : (map ? [map.getCenter().lat, map.getCenter().lng] : [SPB.lat, SPB.lng]);
+
+    pickedLat = fromInput ? fromInput.lat : null;
+    pickedLng = fromInput ? fromInput.lng : null;
+
+    setPickStatus();
+
+    setTimeout(() => {
+      if (!pickMap) {
+        pickMap = L.map('pick-map', { zoomControl: true }).setView(center, fromInput ? 14 : 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(pickMap);
+
+        pickMap.on('click', (e) => {
+          const lat = Number(e.latlng.lat.toFixed(6));
+          const lng = Number(e.latlng.lng.toFixed(6));
+          pickedLat = lat;
+          pickedLng = lng;
+          setPickStatus();
+
+          if (!pickMarker) {
+            pickMarker = L.marker([lat, lng], { draggable: true }).addTo(pickMap);
+            pickMarker.on('dragend', () => {
+              const ll = pickMarker.getLatLng();
+              pickedLat = Number(ll.lat.toFixed(6));
+              pickedLng = Number(ll.lng.toFixed(6));
+              setPickStatus();
+            });
+          } else {
+            pickMarker.setLatLng([lat, lng]);
+          }
+        });
+      } else {
+        pickMap.setView(center, fromInput ? 14 : Math.max(pickMap.getZoom(), 12));
+      }
+
+      pickMap.invalidateSize();
+
+      if (fromInput) {
+        if (!pickMarker) {
+          pickMarker = L.marker([fromInput.lat, fromInput.lng], { draggable: true }).addTo(pickMap);
+          pickMarker.on('dragend', () => {
+            const ll = pickMarker.getLatLng();
+            pickedLat = Number(ll.lat.toFixed(6));
+            pickedLng = Number(ll.lng.toFixed(6));
+            setPickStatus();
+          });
+        } else {
+          pickMarker.setLatLng([fromInput.lat, fromInput.lng]);
+        }
+      }
+    }, 0);
+  }
+
+  function closePickModal(){
+    pickBackdrop.classList.remove('open');
+    pickBackdrop.setAttribute('aria-hidden','true');
+  }
+
+  if (btnPickCoords) btnPickCoords.addEventListener('click', openPickModal);
+  if (pickClose) pickClose.addEventListener('click', closePickModal);
+  if (pickCancel) pickCancel.addEventListener('click', closePickModal);
+
+  if (pickBackdrop) {
+    pickBackdrop.addEventListener('click', (e) => {
+      if (e.target === pickBackdrop) closePickModal();
+    });
+  }
+
+  if (pickOk) {
+    pickOk.addEventListener('click', () => {
+      if (pickedLat === null || pickedLng === null) {
+        alert('Сначала выбери точку на карте.');
+        return;
+      }
+      mLatLng.value = `${Number(pickedLat).toFixed(6)}; ${Number(pickedLng).toFixed(6)}`;
+      if (!mAddress.value.trim()) mAddress.value = `(${Number(pickedLat).toFixed(6)}; ${Number(pickedLng).toFixed(6)})`;
+      closePickModal();
+    });
+  }
+
+  // ===== Calendar =====
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    locale: 'ru',
+    timeZone: 'local',
+    height: '100%',
+    initialView: 'dayGridWeek',
+    firstDay: 1,
+    nowIndicator: true,
+    dayMaxEvents: false,
+    displayEventTime: false,
+
+    // ✅ сортировка внутри дня
+    eventOrder: 'extendedProps.sortKey,title',
+    eventOrderStrict: true,
+
+    headerToolbar: {
+      left: 'prev,next today addManual',
+      center: 'title',
+      right: 'dayGridWeek,dayGridMonth'
+    },
+
+    views: {
+      dayGridWeek:  { buttonText: 'Неделя' },
+      dayGridMonth: { buttonText: 'Месяц' }
+    },
+    buttonText: { today: 'Сегодня' },
+
+    customButtons: {
+      addManual: {
+        text: '＋ Ручная',
+        click: () => openModal()
+      }
+    },
+
+    loading: function(isLoading){
+      if (isLoading) setLoading(true, 'Данные загружаются…', 'Получаем события из Bitrix');
+      else setLoading(false);
+    },
+
+    dayHeaderContent: function(arg){
+      if (arg.view.type !== 'dayGridWeek') {
+        return { text: arg.text };
+      }
+      const key = dateKeyLocal(arg.date);
+
+      const label = document.createElement('label');
+      label.className = 'dayhdr';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'dayhdr-cb';
+      cb.setAttribute('data-day-key', key);
+      cb.checked = selectedDayKeys.has(key);
+
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedDayKeys.add(key);
+        else selectedDayKeys.delete(key);
+        applyMarkerFilterOnly();
+      });
+
+      const txt = document.createElement('div');
+      txt.className = 'dayhdr-text';
+      txt.addEventListener('click', (e) => e.stopPropagation());
+
+      const dow = document.createElement('div');
+      dow.className = 'dayhdr-dow';
+      dow.textContent = arg.date.toLocaleDateString('ru-RU', { weekday: 'short' });
+
+      const dm = document.createElement('div');
+      dm.className = 'dayhdr-date';
+      dm.textContent = arg.date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+
+      txt.appendChild(dow);
+      txt.appendChild(dm);
+
+      label.appendChild(cb);
+      label.appendChild(txt);
+
+      return { domNodes: [label] };
+    },
+
+    datesSet: function(info){
+      if (info.view.type !== 'dayGridWeek') {
+        weekKeys = [];
+        selectedDayKeys = new Set();
+        setTimeout(() => applySearchFilter(), 0);
+        return;
+      }
+
+      const start = new Date(info.start);
+      const keys = [];
+      for (let i = 0; i < 7; i++) {
+        keys.push(dateKeyLocal(start));
+        start.setDate(start.getDate() + 1);
+      }
+      weekKeys = keys;
+      selectedDayKeys = new Set(keys);
+
+      setTimeout(() => {
+        updateDayHeaderCheckboxes();
+        applySearchFilter();
+      }, 0);
+    },
+
+    events: async (_, success, fail) => {
+      setLoading(true, 'Данные загружаются…', 'Подтягиваем события');
+      try {
+        const r = await fetch('/api/events', { headers: { 'Accept': 'application/json' } });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const payload = await r.json();
+
+        if (payload && payload.version) lastVersion = payload.version;
+        const data = (payload && payload.events) ? payload.events : [];
+
+        searchCache.clear();
+
+        for (const ev of data) {
+          ev.extendedProps = ev.extendedProps || {};
+          const isBitrixDone = (ev.extendedProps.isDone === true);
+          ev.extendedProps.done = isBitrixDone ? true : getDone(ev.id);
+
+          // ✅ унифицируем "черный" на фронте: темно-серый + пригодный для маркеров
+          const p = ev.extendedProps || {};
+          const c0 = (p.color || ev.backgroundColor || '');
+          const isBlk = isBlackEventProps(p, c0);
+          if (isBlk) {
+            p.isBlack = true;
+            p.color = BLACK_BG;
+            ev.backgroundColor = BLACK_BG;
+            ev.borderColor = BLACK_BG;
+          }
+        }
+
+        setTimeout(() => {
+          for (const ev of data) {
+            const p = ev.extendedProps || {};
+            if (p.hideMarker === true) continue;
+
+            const lat = toNum(p.lat);
+            const lng = toNum(p.lng);
+            if (lat !== null && lng !== null) {
+              let c = (p.color || ev.backgroundColor || '#3b82f6');
+              if (isBlackEventProps(p, c)) c = BLACK_BG;
+
+              setOrUpdateMarker(String(ev.id), lat, lng, c, {
+                id: String(ev.id),
+                title: ev.title,
+                backgroundColor: c,
+                extendedProps: p
+              });
+            }
+          }
+          applySearchFilter();
+        }, 0);
+
+        success(data);
+
+        setTimeout(() => {
+          if (!selectedEventId) return;
+          const ev = calendar.getEventById(String(selectedEventId));
+          if (ev) setCardFromEvent(ev);
+          refreshSelectedClass();
+          updateMiniForId(String(selectedEventId));
+        }, 0);
+      } catch (e) {
+        console.error(e);
+        fail(e);
+      } finally {
+        setLoading(false);
+      }
+    },
+
+    eventDidMount(info) {
+      rememberEventEl(info.event.id, info.el);
+
+      const p = info.event.extendedProps || {};
+      let c = (p.color || info.event.backgroundColor);
+
+      const isBlk = isBlackEventProps(p, c);
+      if (isBlk) c = BLACK_BG;
+
+      if (c) {
+        info.el.style.setProperty('background-color', c, 'important');
+        info.el.style.setProperty('border-color', c, 'important');
+      }
+
+      // ✅ цвет текста: белый только для темно-серых
+      if (isBlk) {
+        info.el.classList.add('ev-black');
+        info.el.style.color = '#f8fafc';
+      } else {
+        info.el.classList.remove('ev-black');
+        info.el.style.color = '#0f172a';
+      }
+
+      ensureMiniCard(info.el, info.event);
+
+      if (selectedEventId && String(info.event.id) === String(selectedEventId)) {
+        info.el.classList.add('ev-selected');
+      }
+
+      if (!isMatchSearch(info.event, searchQuery)) {
+        info.el.classList.add('ev-hidden');
+      }
+    },
+
+    eventWillUnmount(info) {
+      forgetEventEl(info.event.id, info.el);
+    },
+
+    eventClick(info) {
+      selectEventById(info.event.id, { focusMap: true });
+    }
+  });
+
+  function selectEventById(id, opts = {}) {
+    const ev = calendar.getEventById(String(id));
+    if (!ev) return;
+
+    selectedEventId = String(id);
+
+    if (isWeekView() && weekKeys.length) {
+      const k = eventDayKey(ev);
+      if (k && !selectedDayKeys.has(k)) {
+        selectedDayKeys.add(k);
+        updateDayHeaderCheckboxes();
+        applyMarkerFilterOnly();
+      }
+    }
+
+    if (ev.start) {
+      calendar.gotoDate(ev.start);
+      setTimeout(() => markSelectedInDomByEventId(selectedEventId), 0);
+    } else {
+      markSelectedInDomByEventId(selectedEventId);
+    }
+
+    setCardFromEvent(ev);
+    updateMiniForId(selectedEventId);
+
+    ensureCoordsForEvent(ev).then((ok) => {
+      if (!ok) return;
+      const p = ev.extendedProps || {};
+      const lat = toNum(p.lat);
+      const lng = toNum(p.lng);
+      if (opts.focusMap !== false && lat !== null && lng !== null) {
+        map.setView([lat, lng], 14);
+        const marker = eventMarkers[String(id)];
+        if (marker && map.hasLayer(marker)) marker.openPopup();
+      }
+    });
+
+    const p = ev.extendedProps || {};
+    const lat = toNum(p.lat);
+    const lng = toNum(p.lng);
+    if (opts.focusMap !== false && p.hideMarker !== true && lat !== null && lng !== null) {
+      map.setView([lat, lng], 14);
+      const marker = eventMarkers[String(id)];
+      if (marker && map.hasLayer(marker)) marker.openPopup();
+    }
+  }
+
+  calendar.render();
+
+  // ===== SEARCH handlers =====
+  if (elSearch) {
+    elSearch.addEventListener('input', () => {
+      searchQuery = elSearch.value || '';
+      scheduleSearchApply();
+    });
+
+    elSearch.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const q = normSearch(elSearch.value || '');
+      if (!q) return;
+
+      const evs = calendar.getEvents();
+      for (const ev of evs) {
+        if (isMatchSearch(ev, q)) {
+          selectEventById(ev.id, { focusMap: true });
+          break;
+        }
+      }
+    });
+  }
+
+  if (elSearchClear) {
+    elSearchClear.addEventListener('click', () => {
+      if (elSearch) elSearch.value = '';
+      searchQuery = '';
+      applySearchFilter();
+    });
+  }
+
+  if (elDone) {
+    elDone.addEventListener('change', () => {
+      if (!selectedEventId) return;
+
+      const id = String(selectedEventId);
+      const ev = calendar.getEventById(id);
+      const p = ev?.extendedProps || {};
+
+      if (p.isDone === true) {
+        elDone.checked = true;
+        applyDoneUi(true);
+        setDoneReadonly(true);
+        updateMiniForId(id);
+        return;
+      }
+
+      const isDone = !!elDone.checked;
+
+      setDone(id, isDone);
+      applyDoneUi(isDone);
+
+      if (ev) ev.setExtendedProp('done', isDone);
+
+      updateMiniForId(id);
+      refreshSelectedClass();
+    });
+  }
+
+  if (btnSaveFree) {
+    btnSaveFree.addEventListener('click', async () => {
+      if (!selectedEventId) return;
+      const id = String(selectedEventId);
+      const text = (elFree && typeof elFree.value === 'string') ? elFree.value : '';
+
+      btnSaveFree.disabled = true;
+      btnSaveFree.textContent = 'Сохраняю...';
+      try {
+        await saveFreeComment(id, text);
+
+        const ev = calendar.getEventById(id);
+        if (ev) ev.setExtendedProp('freeComment', text);
+
+        searchCache.delete(id);
+        applySearchFilter();
+
+        if (elFreeHint) elFreeHint.textContent = 'Сохранено.';
+        setTimeout(() => {
+          if (elFreeHint) elFreeHint.textContent = 'Сохраняется на сервере и не пропадает после обновления.';
+        }, 1200);
+      } catch (e) {
+        alert('Не удалось сохранить комментарий: ' + (e?.message || e));
+      } finally {
+        btnSaveFree.disabled = false;
+        btnSaveFree.textContent = 'Сохранить';
+      }
+    });
+  }
+
+  if (btnDeleteManual) {
+    btnDeleteManual.addEventListener('click', async () => {
+      if (!selectedEventId || !isManualId(selectedEventId)) return;
+      const ok = confirm('Удалить эту ручную карточку?');
+      if (!ok) return;
+
+      const id = String(selectedEventId);
+
+      try {
+        const r = await fetch(`/api/manual/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+
+        const ev = calendar.getEventById(id);
+        if (ev) ev.remove();
+
+        removeMarker(id);
+
+        selectedEventId = null;
+        btnDeleteManual.style.display = 'none';
+
+        setCardSelected(false);
+
+        elTitle.textContent = '—';
+        elAddr.textContent = '—';
+        elLL.textContent = '—';
+        elPhone.textContent = '—';
+        elStone.textContent = '—';
+
+        elManager.textContent = '—';
+        elInstallers.textContent = '—';
+        elColorPill.textContent = 'Цвет: —';
+        elPlan.textContent = '—';
+        elAssigned.textContent = '—';
+        elInstall.textContent = '—';
+        if (elFree) elFree.value = '';
+        if (elDone) { elDone.checked = false; applyDoneUi(false); setDoneReadonly(false); }
+        clearSelectedInDom();
+
+        searchCache.delete(id);
+        applySearchFilter();
+      } catch (e) {
+        alert('Не удалось удалить: ' + (e?.message || e));
+      }
+    });
+  }
+
+  if (modalSave) {
+    modalSave.addEventListener('click', async () => {
+      const title = (mTitle.value || '').trim();
+      if (!title) {
+        alert('Заполни “№ заказа / Заголовок”');
+        return;
+      }
+
+      let lat = null, lng = null;
+      const ll = (mLatLng.value || '').trim();
+      if (ll.includes(';')) {
+        const [a,b] = ll.split(';');
+        lat = toNum(a);
+        lng = toNum(b);
+      } else if (ll.includes(',')) {
+        const [a,b] = ll.split(',');
+        lat = toNum(a);
+        lng = toNum(b);
+      }
+
+      const plannedInstall = mPlan.value ? new Date(mPlan.value + 'T00:00:00').toISOString() : null;
+      const assignedInstall = mAssigned.value ? new Date(mAssigned.value).toISOString() : null;
+      const start = assignedInstall || plannedInstall || new Date().toISOString();
+
+      const payload = {
+        title,
+        phone: (mPhone.value || '').trim(),
+        address: (mAddress.value || '').trim(),
+        lat, lng,
+        stoneCode: (mStone.value || '').trim(),
+        thickness: (mThickness.value || '').trim(),
+        plannedInstall,
+        assignedInstall,
+        installComment: (mInstall.value || '').trim(),
+        start
+      };
+
+      try {
+        const r = await fetch('/api/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+
+        const fc = data && data.event;
+        if (!fc) throw new Error('bad response');
+
+        fc.extendedProps = fc.extendedProps || {};
+        fc.extendedProps.done = getDone(fc.id);
+
+        calendar.addEvent(fc);
+
+        const p = fc.extendedProps || {};
+        const la = toNum(p.lat);
+        const lo = toNum(p.lng);
+        if (p.hideMarker !== true && la !== null && lo !== null) {
+          let c = (p.color || '#ef4444');
+          if (isBlackEventProps(p, c)) c = BLACK_BG;
+          setOrUpdateMarker(fc.id, la, lo, c, fc);
+        }
+
+        searchCache.delete(String(fc.id));
+        applySearchFilter();
+
+        closeModal();
+        setTimeout(() => selectEventById(fc.id, { focusMap: true }), 0);
+      } catch (e) {
+        alert('Не удалось создать ручную карточку: ' + (e?.message || e));
+      }
+    });
+  }
+
+  // ====== авто-обновление по версии (битрикс) ======
+  async function pollVersion() {
+    try {
+      const r = await fetch('/api/ping', { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const p = await r.json();
+
+      if (lastVersion === null && p?.version) {
+        lastVersion = p.version;
+      } else if (p?.version && lastVersion && p.version !== lastVersion) {
+        lastVersion = p.version;
+
+        clearAllMarkers();
+        calendar.refetchEvents();
+      }
+    } catch (e) {
+      // молча
+    } finally {
+      setTimeout(pollVersion, 5000);
+    }
+  }
+  pollVersion();
+</script>
+</body>
+</html>

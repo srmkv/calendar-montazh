@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Админка — пользователи</title>
+  <style>
+    :root{ --bg:#f3f4f6; --panel:#fff; --text:#0f172a; --muted:#64748b; --border:#e5e7eb; --danger:#dc2626; }
+    html,body{ height:100%; margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    .top{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel); }
+    .pill{ font-size:12px; font-weight:800; border:1px solid var(--border); background:#fff; border-radius:999px; padding:6px 10px; color:#334155; }
+    .btn{ font-size:12px; font-weight:900; border:1px solid var(--border); background:#fff; border-radius:999px; padding:7px 12px; cursor:pointer; }
+    .btn:hover{ background:#f8fafc; }
+    .btn.danger{ border-color: rgba(220,38,38,0.35); color:#991b1b; }
+    .wrap{ padding:14px; max-width:1100px; margin:0 auto; }
+    h1{ margin:0 0 10px; font-size:18px; font-weight:900; }
+    .grid{ display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:12px; }
+    label{ display:block; font-size:11px; font-weight:900; color:#334155; margin-bottom:6px; }
+    input,select{ width:100%; box-sizing:border-box; padding:9px 10px; border-radius:12px; border:1px solid var(--border); font-size:12px; }
+    .table{ margin-top:12px; background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+    table{ width:100%; border-collapse:collapse; font-size:12px; }
+    th,td{ padding:10px; border-bottom:1px solid var(--border); vertical-align:top; }
+    th{ text-align:left; font-weight:900; background:#f8fafc; }
+    tr:last-child td{ border-bottom:none; }
+    .small{ color:var(--muted); font-weight:700; font-size:11px; }
+    .row-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+    .hint{ margin:8px 0 0; color:var(--muted); font-weight:700; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <a class="btn" href="/">← К календарю</a>
+    <span class="pill" id="me">—</span>
+    <button class="btn danger" id="logout" style="margin-left:auto;">Выйти</button>
+  </div>
+
+  <div class="wrap">
+    <h1>Пользователи</h1>
+
+    <div class="grid">
+      <div>
+        <label>ФИО</label>
+        <input id="fullName" placeholder="Иванов Иван Иванович" />
+      </div>
+      <div>
+        <label>Логин</label>
+        <input id="username" placeholder="login" />
+      </div>
+      <div>
+        <label>Пароль</label>
+        <input id="password" type="password" placeholder="мин. 4 символа" />
+      </div>
+      <div>
+        <label>Роль</label>
+        <select id="role">
+          <option value="admin">Админ</option>
+          <option value="operator">Оператор календаря</option>
+          <option value="viewer">Пользователь (просмотр)</option>
+        </select>
+      </div>
+      <div style="grid-column:1 / -1; display:flex; gap:10px; align-items:center; justify-content:space-between;">
+        <div class="hint">Админ может создавать/редактировать/удалять пользователей.</div>
+        <button class="btn" id="create" style="font-weight:900;">＋ Добавить пользователя</button>
+      </div>
+    </div>
+
+    <div class="table">
+      <table>
+        <thead>
+          <tr>
+            <th>ФИО</th>
+            <th>Логин</th>
+            <th>Роль</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+  async function apiFetch(url, opts){
+    const r = await fetch(url, opts);
+    if (r.status === 401) { window.location.href = '/login'; throw new Error('unauthorized'); }
+    if (r.status === 403) { alert('Недостаточно прав'); throw new Error('forbidden'); }
+    return r;
+  }
+
+  const meEl = document.getElementById('me');
+  const logoutBtn = document.getElementById('logout');
+  const tbody = document.getElementById('tbody');
+
+  const fullName = document.getElementById('fullName');
+  const username = document.getElementById('username');
+  const password = document.getElementById('password');
+  const role = document.getElementById('role');
+  const createBtn = document.getElementById('create');
+
+  logoutBtn.addEventListener('click', async ()=>{
+    try{ await apiFetch('/api/logout', { method:'POST' }); }catch{}
+    window.location.href = '/login';
+  });
+
+  async function loadMe(){
+    const r = await apiFetch('/api/me', { headers:{ 'Accept':'application/json' }});
+    const j = await r.json();
+    meEl.textContent = j?.user?.fullName ? (j.user.fullName + ' — ' + j.user.role) : '—';
+  }
+
+  function roleLabel(v){
+    if (v==='admin') return 'Админ';
+    if (v==='operator') return 'Оператор';
+    return 'Просмотр';
+  }
+
+  async function loadUsers(){
+    const r = await apiFetch('/api/users', { headers:{ 'Accept':'application/json' }});
+    const j = await r.json();
+    const items = j?.items || [];
+    tbody.innerHTML = '';
+
+    for (const u of items){
+      const tr = document.createElement('tr');
+
+      const td1 = document.createElement('td');
+      td1.innerHTML = `<div style="font-weight:900">${u.fullName}</div><div class="small">${u.id}</div>`;
+
+      const td2 = document.createElement('td');
+      td2.innerHTML = `<div style="font-weight:900">${u.username}</div>`;
+
+      const td3 = document.createElement('td');
+      td3.innerHTML = `<div style="font-weight:900">${roleLabel(u.role)}</div>`;
+
+      const td4 = document.createElement('td');
+      const wrap = document.createElement('div');
+      wrap.className = 'row-actions';
+
+      const btnEdit = document.createElement('button');
+      btnEdit.className = 'btn';
+      btnEdit.textContent = 'Редактировать';
+
+      const btnDel = document.createElement('button');
+      btnDel.className = 'btn danger';
+      btnDel.textContent = 'Удалить';
+
+      btnEdit.addEventListener('click', async ()=>{
+        const newName = prompt('ФИО:', u.fullName) ?? '';
+        if (!newName.trim()) return;
+
+        const newRole = prompt('Роль (admin/operator/viewer):', u.role) ?? '';
+        const pass = prompt('Новый пароль (оставь пустым чтобы не менять):', '') ?? '';
+
+        const payload = { fullName: newName.trim() };
+        if (newRole.trim()) payload.role = newRole.trim();
+        if (pass) payload.password = pass;
+
+        const r = await apiFetch('/api/users/' + encodeURIComponent(u.id), {
+          method:'PUT',
+          headers:{ 'Content-Type':'application/json', 'Accept':'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const j = await r.json().catch(()=>null);
+        if (!r.ok || !j?.ok) return alert('Не удалось обновить: ' + (j?.error || r.status));
+        await loadMe();
+        await loadUsers();
+      });
+
+      btnDel.addEventListener('click', async ()=>{
+        const ok = confirm('Удалить пользователя "' + u.fullName + '"?');
+        if (!ok) return;
+        const r = await apiFetch('/api/users/' + encodeURIComponent(u.id), { method:'DELETE' });
+        const j = await r.json().catch(()=>null);
+        if (!r.ok || !j?.ok) return alert('Не удалось удалить: ' + (j?.error || r.status));
+        await loadUsers();
+      });
+
+      wrap.appendChild(btnEdit);
+      wrap.appendChild(btnDel);
+      td4.appendChild(wrap);
+
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+      tbody.appendChild(tr);
+    }
+  }
+
+  createBtn.addEventListener('click', async ()=>{
+    const payload = {
+      fullName: (fullName.value||'').trim(),
+      username: (username.value||'').trim(),
+      password: (password.value||''),
+      role: role.value
+    };
+    const r = await apiFetch('/api/users', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Accept':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json().catch(()=>null);
+    if (!r.ok || !j?.ok) return alert('Не удалось создать: ' + (j?.error || r.status));
+    fullName.value=''; username.value=''; password.value=''; role.value='viewer';
+    await loadUsers();
+  });
+
+  (async ()=>{
+    await loadMe();
+    await loadUsers();
+  })();
+</script>
+</body>
+</html>

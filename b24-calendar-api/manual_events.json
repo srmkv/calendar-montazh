@@ -1,0 +1,18 @@
+[
+  {
+    "id": "m-1766155530227-709",
+    "title": "321123",
+    "phone": "79997221484",
+    "address": "тестовый адрес",
+    "lat": 59.953204,
+    "lng": 30.559313,
+    "stoneCode": "камень",
+    "thickness": "11",
+    "plannedInstall": "2025-12-18T21:00:00.000Z",
+    "assignedInstall": null,
+    "installComment": "тестовый комментарий",
+    "measureText": "1323123123",
+    "start": "2025-12-18T21:00:00.000Z",
+    "createdAt": "2025-12-19T14:45:30.227Z"
+  }
+]
